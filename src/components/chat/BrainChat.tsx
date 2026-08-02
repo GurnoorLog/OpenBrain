@@ -5,14 +5,13 @@ import { buildPersona, buildStandaloneHtml, CHAT_CSS, readFireworksApiKey, type 
 
 export interface BrainChatProps {
   readonly open: boolean
-  readonly onOpen: () => void
   readonly onClose: () => void
 }
 
-// A small docked chat pill that TALKS TO THE REAL BRAIN: every message runs
+// A small docked chat card that TALKS TO THE REAL BRAIN: every message runs
 // the graph (browser fetch → memory → llm → output) so you watch the nodes
-// light up on the canvas as the assistant answers.
-export default function BrainChat({ open, onOpen, onClose }: BrainChatProps) {
+// light up on the canvas as the assistant answers. Opened from the header.
+export default function BrainChat({ open, onClose }: BrainChatProps) {
   const nodes = useBrainStore((state) => state.nodes)
   const projectName = useBrainStore((state) => state.projectName)
   const running = useBrainStore((state) => state.running)
@@ -78,17 +77,7 @@ export default function BrainChat({ open, onOpen, onClose }: BrainChatProps) {
     addLog('Chat app opened in a new tab', 'success')
   }
 
-  if (!open) {
-    return (
-      <>
-        <style>{CHAT_CSS}</style>
-        <button className="ob-chat-pill" onClick={onOpen} title="Open chat">
-          <iconify-icon icon="lucide:message-square" className="text-xl"></iconify-icon>
-          Chat
-        </button>
-      </>
-    )
-  }
+  if (!open) return null
 
   return (
     <>
