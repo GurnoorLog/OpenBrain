@@ -313,8 +313,10 @@ export const useBrainStore = create<BrainStore>((set, get) => ({
     generationController = controller
     set({ generating: true })
     void generateFromArchitect(prompt, viewport, controller.signal).finally(() => {
-      if (generationController === controller) generationController = null
-      set({ generating: false })
+      if (generationController === controller) {
+        generationController = null
+        set({ generating: false })
+      }
     })
   },
 
@@ -328,8 +330,10 @@ export const useBrainStore = create<BrainStore>((set, get) => ({
     set({ clarify: null, generating: true })
     void generateFromArchitect(clarify.prompt, clarify.viewport, controller.signal, answers).finally(
       () => {
-        if (generationController === controller) generationController = null
-        set({ generating: false })
+        if (generationController === controller) {
+          generationController = null
+          set({ generating: false })
+        }
       },
     )
   },

@@ -84,5 +84,5 @@ export function downloadReport(markdown: string, filename = 'brain-report.md'): 
   link.href = url
   link.download = filename
   link.click()
-  URL.revokeObjectURL(url)
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000)
 }

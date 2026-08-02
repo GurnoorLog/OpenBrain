@@ -18,6 +18,7 @@ import { useBrainStore } from '../store/useBrainStore'
 import { useAuth } from '../core/auth/useAuth'
 import { updateProject, buildProjectData } from '../core/projects/projectsRepository'
 import { loadSharedBrain } from '../core/brainIo'
+import { getBrainMemoryStore } from '../core/memory/brainMemory'
 
 export default function StudioApp() {
   const zoomRef = useRef<HTMLDivElement>(null)
@@ -59,26 +60,37 @@ export default function StudioApp() {
     if (!projectId || !projectOwnerId || generating || nodes.length === 0) return
     if (!user || projectOwnerId !== user.id) return
     const timer = window.setTimeout(() => {
-      void updateProject(projectOwnerId, projectId, {
-        data: buildProjectData(
-          projectPrompt ?? '',
-          nodes.map(({ id, type, x, y, content, reason, model }) => ({
-            id,
-            type,
-            x,
-            y,
-            content,
-            reason,
-            model,
-          })),
-          connections,
-        ),
-      }).catch((error) => {
-        useBrainStore.getState().addLog(
-          error instanceof Error ? error.message : 'Autosave failed',
-          'error',
-        )
-      })
+      const data = buildProjectData(
+        projectPrompt ?? '',
+        nodes.map(({ id, type, x, y, content, reason, model }) => ({
+          id,
+          type,
+          x,
+          y,
+          content,
+          reason,
+          model,
+        })),
+        connections,
+      )
+      // Preserve cross-run memory entries written by memory nodes — the run
+      // writes them into the same data.brain JSON column, so a clobbering
+      // autosave would silently wipe them.
+      void getBrainMemoryStore()
+        .read(projectId)
+        .then((entries) => {
+          if (entries.length > 0) {
+            ;(data.brain as { nodes: unknown; connections: unknown; memory?: unknown }).memory =
+              entries
+          }
+          return updateProject(projectOwnerId, projectId, { data })
+        })
+        .catch((error) => {
+          useBrainStore.getState().addLog(
+            error instanceof Error ? error.message : 'Autosave failed',
+            'error',
+          )
+        })
     }, 1200)
     return () => window.clearTimeout(timer)
   }, [projectId, projectPrompt, projectOwnerId, nodes, connections, generating, user])

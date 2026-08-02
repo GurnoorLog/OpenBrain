@@ -50,7 +50,7 @@ export class FireworksArchitect extends BaseArchitect {
     } catch {
       /* storage unavailable — use the default */
     }
-    return this.activeModel()
+    return this.defaultModel
   }
 
   override async health(): Promise<ProviderHealth> {

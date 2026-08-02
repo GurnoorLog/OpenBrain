@@ -31,7 +31,9 @@ export function exportBrain(): void {
   link.href = url
   link.download = 'brain.json'
   link.click()
-  URL.revokeObjectURL(url)
+  // Defer the revoke: Firefox/Safari cancel the download if the URL dies
+  // synchronously with click().
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000)
   useBrainStore.getState().addLog('Brain exported as JSON', 'success')
 }
 
@@ -70,6 +72,9 @@ export function loadSharedBrain(): boolean {
       connections: parsed.connections ?? [],
     })
     useBrainStore.getState().addLog('Shared brain loaded from link', 'success')
+    // Consume the hash so opening a fresh project afterwards doesn't re-apply
+    // the old shared brain.
+    window.history.replaceState(null, '', window.location.pathname + window.location.search)
     return true
   } catch {
     useBrainStore.getState().addLog('Shared brain link is invalid', 'error')

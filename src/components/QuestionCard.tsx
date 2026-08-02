@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useBrainStore } from '../store/useBrainStore'
 
 // Shown when the architect has clarifying questions before designing. One
@@ -8,6 +8,12 @@ export default function QuestionCard() {
   const clarify = useBrainStore((state) => state.clarify)
   const submitClarify = useBrainStore((state) => state.submitClarify)
   const [answers, setAnswers] = useState<string[]>([])
+
+  // Each clarify round starts fresh — without this, answers from a previous
+  // round leak in and can make allAnswered true before the user types.
+  useEffect(() => {
+    setAnswers([])
+  }, [clarify?.prompt])
 
   if (!clarify) return null
 

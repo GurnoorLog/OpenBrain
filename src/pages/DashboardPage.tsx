@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useAuth } from '../core/auth/useAuth'
 import { useNavigation } from '../core/navigation'
 import { useBrainStore } from '../store/useBrainStore'
@@ -107,16 +107,20 @@ export default function DashboardPage() {
   const [showBanner, setShowBanner] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
+  const refreshSeq = useRef(0)
   const refresh = useCallback(async () => {
+    const seq = ++refreshSeq.current
     setLoading(true)
     setError(null)
     try {
       const rows = tab === 'shared' ? await listSharedProjects() : await listProjects(user?.id ?? '')
-      setProjects(rows)
+      if (refreshSeq.current === seq) setProjects(rows)
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to load projects')
+      if (refreshSeq.current === seq) {
+        setError(e instanceof Error ? e.message : 'Failed to load projects')
+      }
     } finally {
-      setLoading(false)
+      if (refreshSeq.current === seq) setLoading(false)
     }
   }, [tab, user?.id])
 

@@ -313,6 +313,9 @@ export class MockNodeExecutor implements NodeExecutor {
     context.log(`Output delivered: ${summary.slice(0, 80)}`, { level: 'success', nodeId: context.currentNodeId })
     if (value !== undefined && inputs['download'] !== false) {
       try {
+        // Record this node's output before building the report, otherwise the
+        // report's Node Outputs section omits the final result.
+        context.setNodeOutputs(context.currentNodeId ?? '', { result: value })
         const markdown = buildRunReport(context)
         downloadReport(markdown, `${context.brain.name || 'brain'}-report.md`)
         context.log('Report downloaded.', { level: 'success', nodeId: context.currentNodeId })

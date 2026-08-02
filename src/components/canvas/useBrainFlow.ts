@@ -112,8 +112,10 @@ export function useBrainFlow(
 
   const onNodeDragStop: OnNodeDrag = useCallback((_event, node) => {
     const store = useBrainStore.getState()
-    store.moveNode(node.id, node.position.x, node.position.y)
+    // Snapshot BEFORE the move so Ctrl+Z actually reverts the drag instead of
+    // capturing the post-drag positions as the "previous" state.
     store.commit()
+    store.moveNode(node.id, node.position.x, node.position.y)
   }, [])
 
   const onInit: OnInit = useCallback((instance: ReactFlowInstance) => {

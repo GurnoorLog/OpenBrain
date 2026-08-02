@@ -1,15 +1,24 @@
 import { useEffect, useRef, useState } from 'react'
 import type { ProviderStatus } from '../core/domain'
 import { PROVIDER_CATALOG } from '../core/architect'
-import { listProviderHealth } from './canvas/architectAdapter'
+import { getSelectedFireworksModel, listProviderHealth } from './canvas/architectAdapter'
 import type { ProviderOverview } from './canvas/architectAdapter'
 import { useBrainStore } from '../store/useBrainStore'
+import type { ProviderId } from '../core/domain'
 
 const STATUS_LABEL: Readonly<Record<ProviderStatus, string>> = {
   available: 'Available',
   unconfigured: 'Not configured',
   unavailable: 'Unavailable',
   degraded: 'Degraded',
+}
+
+function resolveActiveModel(providerId: ProviderId): string {
+  const entry = PROVIDER_CATALOG.find((candidate) => candidate.id === providerId)
+  if (entry?.id === 'fireworks') {
+    return getSelectedFireworksModel() ?? entry.defaultModel ?? ''
+  }
+  return entry?.defaultModel ?? ''
 }
 
 const STATUS_DOT: Readonly<Record<ProviderStatus, string>> = {
@@ -31,8 +40,9 @@ export default function ProviderPill() {
   const [health, setHealth] = useState<Readonly<Record<string, ProviderOverview>>>({})
   const ref = useRef<HTMLDivElement>(null)
 
-  const activeModel =
-    PROVIDER_CATALOG.find((entry) => entry.id === activeProviderId)?.defaultModel ?? ''
+  // The model actually in effect: the user's Settings pick for Fireworks,
+  // otherwise the provider's catalog default.
+  const activeModel = resolveActiveModel(activeProviderId)
 
   useEffect(() => {
     const onClickOutside = (e: MouseEvent) => {
