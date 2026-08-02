@@ -85,7 +85,11 @@ export async function runBrain(options: RunBrainOptions = {}): Promise<string | 
   store.resetStatuses()
   store.addLog('Runtime initialized — executing brain', 'info')
 
-  const brain = toDomainBrain(store.nodes, store.connections)
+  // Re-read state AFTER stamping the chat message: setNodeConfiguration /
+  // resetStatuses replaced the nodes array, so the stale snapshot would drop
+  // the userMessage before the graph is built.
+  const current = useBrainStore.getState()
+  const brain = toDomainBrain(current.nodes, current.connections)
   const events = new ExecutionEvents()
   const engine = new ExecutionEngine({ registry: executorRegistry, events })
   activeEngine = engine
