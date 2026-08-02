@@ -70,15 +70,39 @@ async function fetchText(url: string, signal: AbortSignal): Promise<string> {
 }
 
 // Most public sites (Wikipedia, blogs, docs) do not send CORS headers, so a
-// plain browser fetch is blocked before it starts. Route through a public CORS
-// relay first; fall back to a direct fetch for CORS-friendly endpoints.
+// plain browser fetch is blocked before it starts. Chain of CORS relays:
+// 1. Our own Render cloud executor (/fetch does a server-side fetch — no CORS
+//    at all, most reliable when the service is up).
+// 2. api.allorigins.win /get (JSON wrapper — confirmed to send CORS *).
+// 3. A direct fetch, which works for CORS-friendly endpoints.
 async function fetchViaProxy(url: string, signal: AbortSignal): Promise<string> {
-  const proxied = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`
+  const baseUrl = import.meta.env.VITE_CLOUD_EXECUTOR_URL as string | undefined
+  if (baseUrl) {
+    try {
+      const response = await fetch(
+        `${baseUrl.replace(/\/$/, '')}/fetch?url=${encodeURIComponent(url)}`,
+        { signal },
+      )
+      if (response.ok) {
+        const text = await response.text()
+        if (text.trim() !== '') return text
+      }
+    } catch {
+      /* try the next relay */
+    }
+  }
   try {
-    const response = await fetch(proxied, { signal })
-    if (response.ok) return await response.text()
+    const response = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(url)}`, {
+      signal,
+    })
+    if (response.ok) {
+      const data = (await response.json().catch(() => null)) as { contents?: string } | null
+      if (data && typeof data.contents === 'string' && data.contents.trim() !== '') {
+        return data.contents
+      }
+    }
   } catch {
-    /* fall through to a direct fetch */
+    /* try a direct fetch */
   }
   return fetchText(url, signal)
 }

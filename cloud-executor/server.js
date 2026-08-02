@@ -3,6 +3,7 @@
 // HTTP entrypoint for the OpenBrain cloud executor (Render Web Service).
 //
 //   GET  /health  -> liveness probe
+//   GET  /fetch   -> ?url=... server-side page fetch (CORS proxy for the browser tool)
 //   POST /run     -> { brain: { nodes, connections }, memory? } -> { outputs, order, durationMs, log }
 //
 // CORS is wide open because the executor is a public compute endpoint; the
@@ -78,6 +79,33 @@ async function handleRun(req, res) {
   }
 }
 
+// Fetches a page server-side so the in-browser Browser node can read sites
+// that refuse to send CORS headers. Same wide-open CORS as the rest of the
+// endpoint; a fetch proxy exposes no secrets, only public pages.
+async function handleFetch(req, res) {
+  const target = new URL(req.url, `http://${req.headers.host || 'localhost'}`).searchParams.get('url')
+  if (!target) {
+    send(res, 400, { ok: false, error: 'Missing url query param.' })
+    return
+  }
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), 15000)
+  try {
+    const response = await fetch(target, { signal: controller.signal, redirect: 'follow' })
+    if (!response.ok) {
+      send(res, 502, { ok: false, error: `Upstream HTTP ${response.status}` })
+      return
+    }
+    const text = await response.text()
+    send(res, 200, { ok: true, url: target, text })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    send(res, 502, { ok: false, error: message })
+  } finally {
+    clearTimeout(timeout)
+  }
+}
+
 const server = http.createServer((req, res) => {
   if (req.method === 'OPTIONS') {
     res.writeHead(204, CORS_HEADERS)
@@ -89,6 +117,12 @@ const server = http.createServer((req, res) => {
 
   if (req.method === 'GET' && url.pathname === '/health') {
     send(res, 200, { ok: true, service: 'openbrain-cloud-executor', ts: new Date().toISOString() })
+    return
+  }
+
+  if (req.method === 'GET' && url.pathname === '/fetch') {
+    req.setTimeout(20000)
+    handleFetch(req, res)
     return
   }
 
