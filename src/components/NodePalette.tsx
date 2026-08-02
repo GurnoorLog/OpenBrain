@@ -51,8 +51,9 @@ export default function NodePalette() {
         onDrop={onDrop}
       ></div>
 
-      <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-auto palette-pop">
-        <div className="w-[420px] max-w-[calc(100vw-2rem)] rounded-2xl border border-white/10 bg-[#0b0d13]/95 backdrop-blur-xl shadow-2xl overflow-hidden">
+      <div className="absolute right-4 top-1/2 -translate-y-1/2 z-50 pointer-events-auto">
+        <div className="palette-pop">
+          <div className="w-[420px] max-w-[calc(100vw-2rem)] rounded-2xl border border-white/10 bg-[#0b0d13]/95 backdrop-blur-xl shadow-2xl overflow-hidden">
           <div className="flex items-center justify-between px-5 py-4 border-b border-white/10">
             <div className="flex items-center gap-3">
               <div className="w-9 h-9 rounded-xl bg-teal-400/10 border border-teal-400/20 flex items-center justify-center">
@@ -109,6 +110,7 @@ export default function NodePalette() {
               ))}
             </div>
           </div>
+        </div>
         </div>
       </div>
     </div>
