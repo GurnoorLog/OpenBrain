@@ -10,6 +10,7 @@ import BrainTitle from '../components/BrainTitle'
 import ThinkingPill from '../components/ThinkingPill'
 import QuestionCard from '../components/QuestionCard'
 import KeyRequestCard from '../components/KeyRequestCard'
+import NodePalette from '../components/NodePalette'
 import { runShortcut } from '../components/keyboardShortcuts'
 import { useBrainStore } from '../store/useBrainStore'
 import { updateProject, buildProjectData } from '../core/projects/projectsRepository'
@@ -70,6 +71,7 @@ export default function StudioApp() {
       <ThinkingPill />
       <QuestionCard />
       <KeyRequestCard />
+      <NodePalette />
       <FineTuneConfirmModal />
 
       {/* UI Layer */}

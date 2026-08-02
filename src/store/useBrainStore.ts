@@ -102,6 +102,7 @@ export interface BrainStore {
   view: ViewState
   mode: EditorMode
   showGrid: boolean
+  paletteOpen: boolean
   selectedNodeIds: string[]
   nodes: BrainNode[]
   connections: Connection[]
@@ -142,6 +143,7 @@ export interface BrainStore {
   setView: (view: Partial<ViewState>) => void
   setMode: (mode: EditorMode) => void
   setShowGrid: (showGrid: boolean) => void
+  setPaletteOpen: (paletteOpen: boolean) => void
   setSelection: (ids: string[]) => void
   setRunning: (running: boolean) => void
   setActiveProvider: (providerId: ProviderId) => void
@@ -176,6 +178,7 @@ export const useBrainStore = create<BrainStore>((set, get) => ({
   view: DEFAULT_VIEW,
   mode: 'select',
   showGrid: true,
+  paletteOpen: false,
   selectedNodeIds: [],
   nodes: [],
   connections: [],
@@ -219,6 +222,8 @@ export const useBrainStore = create<BrainStore>((set, get) => ({
   setMode: (mode) => set({ mode }),
 
   setShowGrid: (showGrid) => set({ showGrid }),
+
+  setPaletteOpen: (paletteOpen) => set({ paletteOpen }),
 
   setSelection: (selectedNodeIds) => set({ selectedNodeIds }),
 

@@ -311,6 +311,79 @@ body {
     z-index: 5;
   }
 
+  .palette-fade-in {
+    animation: palette-fade-in 0.2s ease both;
+  }
+
+  .palette-drop-zone {
+    background: rgba(45, 212, 191, 0.08);
+    box-shadow: inset 0 0 0 2px rgba(45, 212, 191, 0.45);
+  }
+
+  @keyframes palette-fade-in {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  .palette-pop {
+    animation: palette-pop 0.32s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  @keyframes palette-pop {
+    from {
+      opacity: 0;
+      transform: translateX(24px);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(0);
+    }
+  }
+
+  .palette-grid-scroll {
+    max-height: calc(100vh - 180px);
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.15) transparent;
+  }
+
+  .palette-grid-scroll::-webkit-scrollbar {
+    width: 5px;
+  }
+
+  .palette-grid-scroll::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.15);
+    border-radius: 9999px;
+  }
+
+  .palette-card {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px;
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    background: rgba(255, 255, 255, 0.03);
+    cursor: grab;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .palette-card:hover {
+    background: rgba(255, 255, 255, 0.07);
+    border-color: rgba(255, 255, 255, 0.16);
+    transform: translateY(-1px);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+  }
+
+  .palette-card:active {
+    cursor: grabbing;
+    transform: translateY(0) scale(0.99);
+  }
+
   .agent-log-content {
     max-height: 0;
     overflow: hidden;
