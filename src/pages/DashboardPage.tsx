@@ -165,6 +165,9 @@ export default function DashboardPage() {
           data: buildProjectData(text, [], []),
         })
         const store = useBrainStore.getState()
+        // Reset the canvas so the fresh project doesn't inherit the previous
+        // project's nodes/connections (mirrors openProject).
+        store.setBrain({ nodes: [], connections: [] })
         store.setProject({
           id: project.id,
           name: project.name,
