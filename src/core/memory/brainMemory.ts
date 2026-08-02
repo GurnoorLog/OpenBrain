@@ -6,17 +6,22 @@ import { supabase } from '../auth/supabase'
 // localStorage for the offline demo. The API key for a node is never stored —
 // only the memory value.
 
-const LOCAL_KEY = 'openbrain:memory'
-
 interface MemoryEntry {
   nodeId: string
   value: string
   updatedAt: string
 }
 
-function readLocal(): MemoryEntry[] {
+// Per-project key so one brain's memory never leaks into another project (or
+// another regenerated brain in the same project). The id passed in is the
+// project id the brain runs under.
+function localKey(id: string): string {
+  return `openbrain:memory:${id}`
+}
+
+function readLocal(id: string): MemoryEntry[] {
   try {
-    const raw = localStorage.getItem(LOCAL_KEY)
+    const raw = localStorage.getItem(localKey(id))
     const parsed = raw ? (JSON.parse(raw) as unknown) : []
     return Array.isArray(parsed) ? (parsed as MemoryEntry[]) : []
   } catch {
@@ -24,9 +29,9 @@ function readLocal(): MemoryEntry[] {
   }
 }
 
-function writeLocal(entries: MemoryEntry[]): void {
+function writeLocal(id: string, entries: MemoryEntry[]): void {
   try {
-    localStorage.setItem(LOCAL_KEY, JSON.stringify(entries))
+    localStorage.setItem(localKey(id), JSON.stringify(entries))
   } catch {
     /* ignore */
   }
@@ -76,10 +81,10 @@ export function createBrainMemoryStore(): BrainMemoryStore {
         const remote = await readRemote(projectId)
         if (remote.length > 0) return remote
       }
-      return readLocal()
+      return readLocal(projectId)
     },
     async write(projectId: string, entries: MemoryEntry[]) {
-      writeLocal(entries)
+      writeLocal(projectId, entries)
       if (projectId) await writeRemote(projectId, entries)
     },
   }

@@ -10,6 +10,7 @@ import {
   SpecificationValidator,
 } from '../../core/architect'
 import { useBrainStore } from '../../store/useBrainStore'
+import { getBrainMemoryStore } from '../../core/memory/brainMemory'
 import { isFinetuneIntent, planFineTune } from './finetuneAdapter'
 import { isFireworksModel } from '../../core/providers/fireworksModels'
 import { DEFAULT_PROVIDER } from '../../core/brain/defaults'
@@ -131,13 +132,20 @@ export interface ProviderOverview {
 // Live health for every catalogued provider, in catalog order. Each status
 // comes from a real .health() call — nothing is faked as available. Failures
 // (e.g. a local Ollama unreachable from a deployed origin) are reported as
-// unavailable instead of rejecting the whole list.
+// unavailable instead of rejecting the whole list. Local providers (Ollama)
+// are never network-checked from a non-localhost origin — the browser would
+// just throw CORS errors on every health poll.
+function isLocalOrigin(): boolean {
+  const host = window.location.hostname
+  return host === 'localhost' || host === '127.0.0.1' || host === '[::1]' || host.startsWith('192.168.')
+}
+
 export async function listProviderHealth(): Promise<readonly ProviderOverview[]> {
   const overviews: ProviderOverview[] = []
   for (const entry of PROVIDER_CATALOG) {
     const provider = providers[entry.id]
     let health: ProviderHealth
-    if (!provider) {
+    if (!provider || (entry.kind === 'local' && !isLocalOrigin())) {
       health = { status: 'unavailable', checkedAt: new Date().toISOString() }
     } else {
       try {
@@ -245,6 +253,12 @@ export async function generateFromPrompt(
         ? { ...DEFAULT_PROVIDER, model: selectedModel }
         : undefined
     const brain = architect.materialize(specification, providerOverride)
+    // A fresh design is a new brain: wipe the previous brain's cross-run
+    // memory for this project so its old answers don't leak into the new one.
+    const projectId = useBrainStore.getState().projectId
+    if (projectId) {
+      void getBrainMemoryStore().write(projectId, [])
+    }
     const spec = toLegacyBrainSpec(brain)
     await revealBrainDesign(spec, specification.nodes, signal)
     store.setBrainTitle(deriveTitle(prompt))
