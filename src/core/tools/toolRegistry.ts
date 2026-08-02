@@ -56,11 +56,6 @@ function firstText(inputs: NodeInputs, key: string, fallback: string): string {
   return fallback
 }
 
-function asUrl(value: unknown, fallback: string): string {
-  if (typeof value === 'string' && value.trim() !== '') return value.trim()
-  return fallback
-}
-
 async function fetchText(url: string, signal: AbortSignal): Promise<string> {
   const response = await fetch(url, { signal })
   if (!response.ok) {
@@ -135,6 +130,38 @@ async function fetchWikipediaExtract(apiUrl: string, signal: AbortSignal): Promi
   const json = JSON.parse(raw) as WikipediaExtractResponse
   const extract = json?.query?.pages?.[0]?.extract ?? ''
   return extract.replace(/\s+/g, ' ').trim()
+}
+
+interface WikipediaSearchResponse {
+  readonly query?: { readonly search?: readonly { readonly title?: string }[] }
+}
+
+// When the browser node has no concrete URL (a generic "browse the web" brain),
+// derive the target article from the user's actual question via Wikipedia
+// search, so the chat brain researches the topic the user asked about.
+async function searchWikipediaTopic(topic: string, signal: AbortSignal): Promise<string | null> {
+  const apiUrl = `https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(
+    topic,
+  )}&srlimit=1&format=json&formatversion=2&origin=*`
+  try {
+    const raw = await fetchViaProxy(apiUrl, signal)
+    const data = JSON.parse(raw) as WikipediaSearchResponse
+    const title = data?.query?.search?.[0]?.title
+    if (!title || title.trim() === '') return null
+    return `https://en.wikipedia.org/wiki/${encodeURIComponent(title.trim().replace(/ /g, '_'))}`
+  } catch {
+    return null
+  }
+}
+
+// The chat pill stamps the user's message onto the llm node; any node may carry
+// it, so scan the whole graph for the live question.
+function findUserMessage(nodes: Readonly<Array<{ readonly configuration?: Readonly<Record<string, unknown>> }>>): string {
+  for (const node of nodes) {
+    const value = node.configuration?.['userMessage']
+    if (typeof value === 'string' && value.trim() !== '') return value.trim()
+  }
+  return ''
 }
 
 export const NEWS_TOOL: ToolDefinition = {
@@ -243,7 +270,8 @@ export const BROWSER_TOOL: ToolDefinition = {
   ],
   async execute(inputs, context) {
     // The architect can pre-pick a target URL on the node's configuration;
-    // prefer that, then an edge-fed url input, then the default topic.
+    // prefer that, then an edge-fed url input, then the user's live chat
+    // question (searched on Wikipedia), then the default topic.
     const node = context.brain.nodes.find((entry) => entry.id === context.currentNodeId)
     const configUrl =
       node?.configuration && typeof node.configuration['url'] === 'string'
@@ -253,10 +281,23 @@ export const BROWSER_TOOL: ToolDefinition = {
       node?.configuration && typeof node.configuration['content'] === 'string'
         ? node.configuration['content']
         : ''
-    const url = asUrl(
-      inputs['url'] ?? configUrl ?? configContent,
-      'https://en.wikipedia.org/wiki/Artificial_intelligence',
-    )
+    const edgeUrl = typeof inputs['url'] === 'string' ? inputs['url'].trim() : ''
+    const userMessage = findUserMessage(context.brain.nodes)
+    let url: string
+    if (edgeUrl !== '') url = edgeUrl
+    else if (configUrl !== '') url = configUrl
+    else if (configContent !== '') url = configContent
+    else if (userMessage !== '') {
+      const derived = await searchWikipediaTopic(userMessage, context.signal)
+      url = derived ?? 'https://en.wikipedia.org/wiki/Artificial_intelligence'
+      if (derived !== null) {
+        context.log(`Browser tool: no URL set — searching Wikipedia for "${userMessage}" → ${derived}`, {
+          nodeId: context.currentNodeId,
+        })
+      }
+    } else {
+      url = 'https://en.wikipedia.org/wiki/Artificial_intelligence'
+    }
     context.log(`Browser tool: fetching ${url}…`, { nodeId: context.currentNodeId })
     const wikiApiUrl = wikipediaExtractUrl(url)
     if (wikiApiUrl !== null) {
