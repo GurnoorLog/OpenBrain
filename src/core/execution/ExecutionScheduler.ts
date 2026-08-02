@@ -47,6 +47,19 @@ export class ExecutionScheduler {
       const remaining = nodes.filter((node) => !order.includes(node.id)).map((node) => node.id)
       throw new ExecutionCycleError(remaining)
     }
+
+    // Output nodes build the run report from every node's outputs, so they
+    // MUST execute last — otherwise a sibling node (e.g. a memory-store that
+    // also depends on the llm) hasn't recorded its output yet when the report
+    // is generated.
+    const outputIds = new Set(
+      nodes.filter((node) => node.type === 'output').map((node) => node.id),
+    )
+    if (outputIds.size > 0) {
+      const nonOutput = order.filter((id) => !outputIds.has(id))
+      const outputs = order.filter((id) => outputIds.has(id))
+      return [...nonOutput, ...outputs]
+    }
     return order
   }
 }

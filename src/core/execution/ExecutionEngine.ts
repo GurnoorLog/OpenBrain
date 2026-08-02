@@ -264,8 +264,17 @@ export class ExecutionEngine {
       const sourceOutputs = context.getNodeOutputs(edge.source)
       if (!sourceOutputs) continue
       const value = sourceOutputs[edge.sourcePort]
-      if (value !== undefined) {
+      if (value === undefined) continue
+      // Multiple edges may feed the same input port (e.g. several sources
+      // into an llm's "context"); merge instead of letting the last one
+      // clobber the earlier values.
+      const existing = inputs[edge.targetPort]
+      if (existing === undefined) {
         inputs[edge.targetPort] = value
+      } else if (typeof existing === 'string') {
+        inputs[edge.targetPort] = `${existing}\n\n${String(value)}`
+      } else {
+        inputs[edge.targetPort] = [existing, value]
       }
     }
     return inputs

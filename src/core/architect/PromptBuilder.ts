@@ -222,7 +222,7 @@ export class PromptBuilder {
       '- Edges describe data flow; the last edge must target the "output" node.',
       '- Explicit capabilities the user NAMES in their request MUST be realized as the matching node type and wired into the graph. Memory ("remember", "persist context") => a "memory" node; "browse the web" / live pages => a "browser" node; image generation => an "imagegen" node; news => a "news" node. Do not mention the capability without adding its node.',
       '- Every data source node you add (browser, filesystem, news, imagegen) MUST connect its output into the "llm" node so the model actually reads that data; a source node whose output reaches nobody is a FAILURE.',
-      '- When a "memory" node is used it MUST receive an incoming edge on its "value" input (so it has something to persist) and its output MUST feed the "llm" node. Correct pattern: filesystem -> memory -> llm -> output.',
+      '- When a "memory" node is used it MUST receive an incoming edge on its "value" input (so it has something to persist) and its output MUST feed the "llm" node. Correct pattern: filesystem -> memory -> llm -> output. Prefer wiring memory\'s "value" input from a DATA SOURCE node (filesystem/browser/news) so the raw content is remembered, rather than from the llm\'s answer.',
     ].join('\n')
   }
 
