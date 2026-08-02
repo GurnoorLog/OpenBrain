@@ -69,6 +69,20 @@ async function fetchText(url: string, signal: AbortSignal): Promise<string> {
   return response.text()
 }
 
+// Most public sites (Wikipedia, blogs, docs) do not send CORS headers, so a
+// plain browser fetch is blocked before it starts. Route through a public CORS
+// relay first; fall back to a direct fetch for CORS-friendly endpoints.
+async function fetchViaProxy(url: string, signal: AbortSignal): Promise<string> {
+  const proxied = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`
+  try {
+    const response = await fetch(proxied, { signal })
+    if (response.ok) return await response.text()
+  } catch {
+    /* fall through to a direct fetch */
+  }
+  return fetchText(url, signal)
+}
+
 export const NEWS_TOOL: ToolDefinition = {
   id: 'news',
   nodeType: 'news',
@@ -174,9 +188,23 @@ export const BROWSER_TOOL: ToolDefinition = {
     { id: 'url', label: 'URL', kind: 'text' },
   ],
   async execute(inputs, context) {
-    const url = asUrl(inputs['url'], 'https://en.wikipedia.org/wiki/Artificial_intelligence')
+    // The architect can pre-pick a target URL on the node's configuration;
+    // prefer that, then an edge-fed url input, then the default topic.
+    const node = context.brain.nodes.find((entry) => entry.id === context.currentNodeId)
+    const configUrl =
+      node?.configuration && typeof node.configuration['url'] === 'string'
+        ? node.configuration['url']
+        : ''
+    const configContent =
+      node?.configuration && typeof node.configuration['content'] === 'string'
+        ? node.configuration['content']
+        : ''
+    const url = asUrl(
+      inputs['url'] ?? configUrl ?? configContent,
+      'https://en.wikipedia.org/wiki/Artificial_intelligence',
+    )
     context.log(`Browser tool: fetching ${url}…`, { nodeId: context.currentNodeId })
-    const text = await fetchText(url, context.signal)
+    const text = await fetchViaProxy(url, context.signal)
     const cleaned = text
       .replace(/<script[\s\S]*?<\/script>/gi, ' ')
       .replace(/<style[\s\S]*?<\/style>/gi, ' ')
