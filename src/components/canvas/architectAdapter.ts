@@ -168,6 +168,7 @@ export function toLegacyBrainSpec(brain: Brain): BrainSpec {
       type: node.type as CapabilityType,
       x: node.position.x,
       y: node.position.y,
+      configuration: node.configuration,
     })),
     connections: brain.edges.map((edge) => ({
       id: edge.id,

@@ -44,7 +44,7 @@ export async function runBrainInCloud(): Promise<void> {
   const timeout = window.setTimeout(() => controller.abort(), CLOUD_TIMEOUT_MS)
 
   const brain: { nodes: BrainNodeSpec[]; connections: Connection[] } = {
-    nodes: store.nodes.map(({ id, type, x, y, content, reason, model }) => ({
+    nodes: store.nodes.map(({ id, type, x, y, content, reason, model, configuration }) => ({
       id,
       type,
       x,
@@ -52,6 +52,7 @@ export async function runBrainInCloud(): Promise<void> {
       content,
       reason,
       model,
+      configuration,
     })),
     connections: store.connections,
   }

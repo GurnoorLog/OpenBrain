@@ -6,6 +6,7 @@ import type {
   Brain,
   BrainNode as DomainBrainNode,
   BrainEdge as DomainBrainEdge,
+  JsonValue,
   NodePosition,
 } from '../../core/domain'
 import { CAPABILITIES } from '../../core/registry'
@@ -40,6 +41,7 @@ function toDomainNode(node: LegacyBrainNode): DomainBrainNode {
     configuration: {
       ...(node.content !== undefined ? { content: node.content } : {}),
       ...(node.model !== undefined ? { model: node.model } : {}),
+      ...((node.configuration ?? {}) as Readonly<Record<string, JsonValue>>),
     },
     metadata: {},
   }

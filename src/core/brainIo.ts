@@ -4,7 +4,7 @@ import type { BrainNodeSpec, Connection } from './types'
 function serializeBrain(): { nodes: BrainNodeSpec[]; connections: Connection[] } {
   const { nodes, connections } = useBrainStore.getState()
   return {
-    nodes: nodes.map(({ id, type, x, y, content, reason, model }) => ({
+    nodes: nodes.map(({ id, type, x, y, content, reason, model, configuration }) => ({
       id,
       type,
       x,
@@ -12,6 +12,7 @@ function serializeBrain(): { nodes: BrainNodeSpec[]; connections: Connection[] }
       content,
       reason,
       model,
+      configuration,
     })),
     connections,
   }

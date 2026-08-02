@@ -34,6 +34,7 @@ export interface BrainNode {
   content?: string
   reason?: string
   model?: string
+  configuration?: Readonly<Record<string, unknown>>
 }
 
 export interface Connection {
@@ -89,6 +90,7 @@ export interface BrainNodeSpec {
   content?: string
   reason?: string
   model?: string
+  configuration?: Readonly<Record<string, unknown>>
 }
 
 export interface BrainSpec {

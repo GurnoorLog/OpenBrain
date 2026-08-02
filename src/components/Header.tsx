@@ -8,6 +8,7 @@ import { useNavigation } from '../core/navigation'
 import { updateProject } from '../core/projects/projectsRepository'
 import { buildProjectData } from '../core/projects/projectsRepository'
 import SettingsPanel from './SettingsPanel'
+import BrainChat from './chat/BrainChat'
 
 const MENU_ITEMS = [
   { id: 'projects', icon: 'lucide:layout-grid', label: 'My Projects' },
@@ -23,6 +24,7 @@ type MenuItemId = (typeof MENU_ITEMS)[number]['id']
 export default function Header() {
   const [menuOpen, setMenuOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [chatOpen, setChatOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
   const running = useBrainStore((state) => state.running)
   const { user, signOut } = useAuth()
@@ -37,6 +39,24 @@ export default function Header() {
     document.addEventListener('click', onClickOutside)
     return () => document.removeEventListener('click', onClickOutside)
   }, [])
+
+  // #preview is the shareable link to the built app: opening it on any tab of
+  // the canvas brings the live chat up immediately.
+  useEffect(() => {
+    const onHash = () => {
+      if (window.location.hash === '#preview') setChatOpen(true)
+    }
+    onHash()
+    window.addEventListener('hashchange', onHash)
+    return () => window.removeEventListener('hashchange', onHash)
+  }, [])
+
+  const closeChat = () => {
+    setChatOpen(false)
+    if (window.location.hash === '#preview') {
+      window.history.replaceState(null, '', window.location.pathname + window.location.search)
+    }
+  }
 
   const onMenuItem = async (id: MenuItemId) => {
     if (id === 'settings') {
@@ -63,7 +83,7 @@ export default function Header() {
         await updateProject(user.id, projectId, {
           data: buildProjectData(
             projectPrompt ?? '',
-            nodes.map(({ id, type, x, y, content, reason, model }) => ({
+            nodes.map(({ id, type, x, y, content, reason, model, configuration }) => ({
               id,
               type,
               x,
@@ -71,6 +91,7 @@ export default function Header() {
               content,
               reason,
               model,
+              configuration,
             })),
             connections,
           ),
@@ -151,6 +172,18 @@ export default function Header() {
         >
           <iconify-icon icon="lucide:cloud-cog" className="text-xl"></iconify-icon>
         </button>
+        <button
+          id="nav-test-btn"
+          className="toolbar-btn hover:text-teal-400"
+          onClick={() => {
+            setChatOpen(true)
+            window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}#preview`)
+          }}
+          aria-label="Test the app — chat with the LLM your brain built"
+          title="Test app — chat with the LLM your brain built"
+        >
+          <iconify-icon icon="lucide:message-square" className="text-xl"></iconify-icon>
+        </button>
         {running && (
           <button
             id="nav-stop-btn"
@@ -185,6 +218,7 @@ export default function Header() {
       </div>
 
       <SettingsPanel open={settingsOpen} onClose={() => setSettingsOpen(false)} />
+      <BrainChat open={chatOpen} onClose={closeChat} />
     </header>
   )
 }
