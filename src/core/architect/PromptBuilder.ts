@@ -86,8 +86,11 @@ export const NODE_CATALOG: readonly NodeCatalogEntry[] = [
   },
   {
     type: 'output',
-    description: 'Deliver the final result',
-    inputs: [{ id: 'result', label: 'Result', kind: 'any' }],
+    description: 'Deliver the final result; downloads a Markdown report',
+    inputs: [
+      { id: 'result', label: 'Result', kind: 'any' },
+      { id: 'download', label: 'Download report', kind: 'boolean' },
+    ],
     outputs: [],
   },
   {

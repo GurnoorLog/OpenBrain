@@ -13,13 +13,16 @@ import { CAPABILITIES } from '../../core/registry'
 import type { CapabilityType } from '../../core/types'
 import { TOOLS, toolForNodeType } from '../../core/tools/toolRegistry'
 import { createFireworksAIProvider } from '../../core/providers/FireworksAIProvider'
+import { getBrainMemoryStore } from '../../core/memory/brainMemory'
 import { useBrainStore } from '../../store/useBrainStore'
 import { toDomainBrain } from './brainAdapter'
 
 const executorRegistry = new NodeExecutorRegistry()
 // LLM nodes run against the real Fireworks API (reads VITE_FIREWORKS_API_KEY)
 // so executing a brain produces real reasoning, not canned placeholder text.
-executorRegistry.registerAll(createMockExecutors({ provider: createFireworksAIProvider() }))
+executorRegistry.registerAll(
+  createMockExecutors({ provider: createFireworksAIProvider(), memoryStore: getBrainMemoryStore() }),
+)
 for (const tool of TOOLS) {
   executorRegistry.register(tool.nodeType, new ToolNodeExecutor(tool))
 }

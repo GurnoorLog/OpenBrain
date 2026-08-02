@@ -547,6 +547,60 @@ body {
     text-overflow: ellipsis;
   }
 
+  .node-reason {
+    margin: 0 14px 12px;
+    padding: 6px 10px;
+    border-radius: 8px;
+    font-size: 10px;
+    line-height: 1.45;
+    color: #a5f3fc;
+    background: rgba(45, 212, 191, 0.06);
+    border: 1px solid rgba(45, 212, 191, 0.16);
+    max-height: 90px;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(45, 212, 191, 0.3) transparent;
+  }
+
+  .node-reason::-webkit-scrollbar {
+    width: 4px;
+  }
+
+  .node-reason::-webkit-scrollbar-thumb {
+    background: rgba(45, 212, 191, 0.3);
+    border-radius: 9999px;
+  }
+
+  .node-card {
+    animation: node-pop-in 0.35s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  @keyframes node-pop-in {
+    from {
+      opacity: 0;
+      transform: scale(0.85);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+
+  .narrator-in {
+    animation: narrator-in 0.3s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  @keyframes narrator-in {
+    from {
+      opacity: 0;
+      transform: translateX(-50%) translateY(-6px);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+  }
+
   .node-inspector {
     margin: 0 14px 12px;
     border: 1px solid rgba(96, 165, 250, 0.25);

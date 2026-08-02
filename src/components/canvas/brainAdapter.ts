@@ -9,6 +9,7 @@ import type {
   NodePosition,
 } from '../../core/domain'
 import { CAPABILITIES } from '../../core/registry'
+import { useBrainStore } from '../../store/useBrainStore'
 import type {
   BrainNode as LegacyBrainNode,
   Connection as LegacyConnection,
@@ -48,18 +49,21 @@ function toDomainEdge(connection: LegacyConnection): DomainBrainEdge {
     sourcePort: connection.fromPort,
     target: connection.to,
     targetPort: connection.toPort,
-    animated: false,
+    animated: true,
     metadata: {},
   }
 }
 
 // Builds an immutable domain Brain from the legacy store graph. This is the
-// presentation-layer bridge between the store and the renderer.
+// presentation-layer bridge between the store and the renderer. The brain id
+// mirrors the open project id so per-project features (like cross-run memory)
+// key off the same value.
 export function toDomainBrain(
   nodes: readonly LegacyBrainNode[],
   connections: readonly LegacyConnection[],
 ): Brain {
-  return factory.create({
+  const state = useBrainStore.getState()
+  const brain = factory.create({
     name: 'canvas-brain',
     templateSpec: {
       name: 'canvas-brain',
@@ -68,6 +72,10 @@ export function toDomainBrain(
       edges: connections.filter((c) => c.id && c.from && c.to).map(toDomainEdge),
     },
   })
+  if (state.projectId) {
+    return { ...brain, id: state.projectId }
+  }
+  return brain
 }
 
 // Renders the legacy store graph through the BrainRenderer. Positions are

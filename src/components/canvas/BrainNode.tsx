@@ -91,6 +91,7 @@ function BrainNodeComponent({ id, data, selected }: NodeProps<BrainFlowNode>) {
         <div className="node-output">{summarizeOutput(node.output)}</div>
       )}
       {node.status === 'error' && node.error && <div className="node-error">{node.error}</div>}
+      {node.reason && <div className="node-reason">{node.reason}</div>}
       {selected && node.output && <NodeInspector output={node.output} />}
       {data.capability === 'filesystem' && selected && (
         <textarea

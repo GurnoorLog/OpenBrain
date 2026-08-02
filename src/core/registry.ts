@@ -219,9 +219,12 @@ export const CAPABILITIES: Record<CapabilityType, CapabilityDef> = {
     type: 'output',
     label: 'Output',
     icon: 'lucide:square-arrow-out-up-right',
-    description: 'Deliver the final result',
+    description: 'Deliver the final result; downloads a Markdown report',
     accent: '#34d399',
-    inputs: [{ id: 'result', label: 'Result', type: 'any' }],
+    inputs: [
+      { id: 'result', label: 'Result', type: 'any' },
+      { id: 'download', label: 'Download report', type: 'boolean' },
+    ],
     outputs: [],
     async execute(ctx) {
       await sleep(300 + rand(200))

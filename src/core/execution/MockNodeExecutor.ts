@@ -2,13 +2,18 @@ import type { AIProvider, NodeType } from '../domain'
 import { NODE_CATALOG } from '../architect'
 import type { NodeExecutor, NodeInputs, NodeOutputs } from './NodeExecutor'
 import type { ExecutionContext } from './ExecutionContext'
+import { getBrainMemoryStore } from '../memory/brainMemory'
+import type { BrainMemoryStore } from '../memory/brainMemory'
+import { buildRunReport, downloadReport } from '../report/buildRunReport'
 
 export interface MockNodeExecutorOptions {
   readonly provider?: AIProvider
+  readonly memoryStore?: BrainMemoryStore
 }
 
 export interface MockExecutorsOptions {
   readonly provider?: AIProvider
+  readonly memoryStore?: BrainMemoryStore
 }
 
 const rand = (max: number): number => Math.floor(Math.random() * max)
@@ -117,11 +122,16 @@ export class MockNodeExecutor implements NodeExecutor {
 
   private async llm(inputs: NodeInputs, context: ExecutionContext): Promise<NodeOutputs> {
     const provider = this.options?.provider
+    const memoryHistory = typeof inputs['history'] === 'string' ? inputs['history'] : ''
+    const prompt = llmContext(inputs) || 'Respond briefly.'
+    const memoryNote =
+      memoryHistory.trim() !== ''
+        ? `\n\n(From memory — prior runs of this brain:\n${memoryHistory.trim()})`
+        : ''
     if (provider && provider.config.status === 'available') {
       context.log('LLM querying the configured AI provider.', { nodeId: context.currentNodeId })
-      const prompt = llmContext(inputs) || 'Respond briefly.'
       const completion = await provider.complete({
-        messages: [{ role: 'user', content: prompt }],
+        messages: [{ role: 'user', content: `${prompt}${memoryNote}` }],
         model: provider.config.model,
         temperature: provider.config.temperature,
         maxTokens: provider.config.maxTokens,
@@ -130,16 +140,30 @@ export class MockNodeExecutor implements NodeExecutor {
       return { response: completion.content }
     }
     await delay(900 + rand(300), context.signal)
-    const prompt = llmContext(inputs) || 'the available context'
-    context.log(`LLM reasoning over: ${prompt.slice(0, 80)}`, { nodeId: context.currentNodeId })
-    return { response: `Draft response generated for "${prompt.slice(0, 80)}"` }
+    const logPrompt = `${prompt}${memoryNote}`.trim()
+    context.log(`LLM reasoning over: ${logPrompt.slice(0, 80)}`, { nodeId: context.currentNodeId })
+    return { response: `Draft response generated for "${logPrompt.slice(0, 80)}"` }
   }
 
   private async memory(inputs: NodeInputs, context: ExecutionContext): Promise<NodeOutputs> {
     await delay(320 + rand(280), context.signal)
-    const value = inputs['value'] ?? null
+    const store = this.options?.memoryStore ?? getBrainMemoryStore()
+    const projectId = context.brain.id
+    const current = inputs['value']
+    const currentText = typeof current === 'string' ? current : JSON.stringify(current ?? '')
+    const previous = await store.read(projectId)
+    const entry = {
+      nodeId: context.currentNodeId ?? 'memory',
+      value: currentText,
+      updatedAt: new Date().toISOString(),
+    }
+    const next = current !== undefined ? [...previous.filter((e) => e.nodeId !== entry.nodeId), entry] : previous
+    await store.write(projectId, next)
+    const historyText = next.map((e) => e.value).join('\n')
     context.log('Memory updated with new context.', { nodeId: context.currentNodeId })
-    return { stored: { previous: null, current: value } }
+    // `stored` carries the FULL accumulated history so a memory -> llm edge
+    // feeds every prior run into the model (cross-run memory).
+    return { stored: historyText, history: historyText, previousCount: previous.length }
   }
 
   private async planner(inputs: NodeInputs, context: ExecutionContext): Promise<NodeOutputs> {
@@ -214,6 +238,18 @@ export class MockNodeExecutor implements NodeExecutor {
     const summary =
       typeof value === 'string' ? value : value === undefined ? '—' : JSON.stringify(value)
     context.log(`Output delivered: ${summary.slice(0, 80)}`, { level: 'success', nodeId: context.currentNodeId })
+    if (value !== undefined && inputs['download'] !== false) {
+      try {
+        const markdown = buildRunReport(context)
+        downloadReport(markdown, `${context.brain.name || 'brain'}-report.md`)
+        context.log('Report downloaded.', { level: 'success', nodeId: context.currentNodeId })
+      } catch (error) {
+        context.log(`Report download failed: ${error instanceof Error ? error.message : String(error)}`, {
+          level: 'error',
+          nodeId: context.currentNodeId,
+        })
+      }
+    }
     return value === undefined ? {} : { result: value }
   }
 

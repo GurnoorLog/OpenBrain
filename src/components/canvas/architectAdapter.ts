@@ -13,7 +13,7 @@ import { useBrainStore } from '../../store/useBrainStore'
 import { isFinetuneIntent, planFineTune } from './finetuneAdapter'
 import type { Brain, ProviderHealth, ProviderId } from '../../core/domain'
 import type { BrainSpec, CapabilityType } from '../../core/types'
-import type { ArchitectProvider } from '../../core/architect'
+import type { ArchitectProvider, SpecificationNode } from '../../core/architect'
 
 const factory = new BrainFactory()
 const validator = new SpecificationValidator()
@@ -44,6 +44,45 @@ function clipReasoning(reasoning: string): string {
   const normalized = reasoning.replace(/\s+/g, ' ').trim()
   if (normalized.length <= MAX_REASONING_CHARS) return normalized
   return `${normalized.slice(0, MAX_REASONING_CHARS)}…`
+}
+
+const revealDelay = (ms: number): Promise<void> =>
+  new Promise((resolve) => setTimeout(resolve, ms))
+
+// "Think out loud" reveal. Instead of dropping the whole graph at once, nodes
+// appear one by one — each stamped with the architect's reason for placing it —
+// then the edges draw themselves in. A narrated design feels alive rather than
+// instant. Respects the AbortSignal so Stop cancels the reveal too.
+async function revealBrainDesign(
+  spec: BrainSpec,
+  specNodes: readonly SpecificationNode[],
+  signal?: AbortSignal,
+): Promise<void> {
+  const store = useBrainStore.getState()
+  const reasons = new Map(specNodes.map((node) => [node.id, node.reason]))
+  store.beginReveal()
+
+  for (const node of spec.nodes) {
+    if (signal?.aborted) {
+      store.endReveal()
+      return
+    }
+    const reason = reasons.get(node.id) ?? ''
+    store.setDesignNarration(reason)
+    store.revealNode({ ...node, reason, status: 'idle' })
+    await revealDelay(420)
+  }
+
+  for (const connection of spec.connections) {
+    if (signal?.aborted) {
+      store.endReveal()
+      return
+    }
+    store.revealConnection(connection)
+    await revealDelay(160)
+  }
+
+  store.endReveal()
 }
 
 export function isFireworksApiKeyConfigured(): boolean {
@@ -158,7 +197,7 @@ export async function generateFromPrompt(
     )
     const brain = architect.materialize(specification)
     const spec = toLegacyBrainSpec(brain)
-    store.setBrain(spec)
+    await revealBrainDesign(spec, specification.nodes, signal)
     store.setBrainTitle(deriveTitle(prompt))
     if (reasoningBuffer.trim()) {
       const clipped = clipReasoning(reasoningBuffer.trim())

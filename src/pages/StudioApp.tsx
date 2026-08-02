@@ -8,12 +8,14 @@ import BottomControls from '../components/BottomControls'
 import FineTuneConfirmModal from '../components/FineTuneConfirmModal'
 import BrainTitle from '../components/BrainTitle'
 import ThinkingPill from '../components/ThinkingPill'
+import Narrator from '../components/Narrator'
 import QuestionCard from '../components/QuestionCard'
 import KeyRequestCard from '../components/KeyRequestCard'
 import NodePalette from '../components/NodePalette'
 import { runShortcut } from '../components/keyboardShortcuts'
 import { useBrainStore } from '../store/useBrainStore'
 import { updateProject, buildProjectData } from '../core/projects/projectsRepository'
+import { loadSharedBrain } from '../core/brainIo'
 
 let seeded = false
 
@@ -28,12 +30,14 @@ export default function StudioApp() {
 
   // First mount only: if we opened a fresh project (has a prompt but no brain)
   // or no project at all, kick off generation here in the studio where the
-  // thinking pill can stream the reasoning, then persist the result.
+  // thinking pill can stream the reasoning, then persist the result. A shared
+  // #brain= link takes priority and loads the graph instead of generating.
   useEffect(() => {
     if (seeded) return
     seeded = true
     const state = useBrainStore.getState()
     if (state.nodes.length > 0) return
+    if (loadSharedBrain()) return
     const prompt =
       state.projectPrompt ??
       'a research assistant with memory that browses the web, reads files, and produces a report'
@@ -50,7 +54,7 @@ export default function StudioApp() {
     void updateProject(projectOwnerId, projectId, {
       data: buildProjectData(
         projectPrompt ?? '',
-        nodes.map(({ id, type, x, y, content }) => ({ id, type, x, y, content })),
+        nodes.map(({ id, type, x, y, content, reason }) => ({ id, type, x, y, content, reason })),
         connections,
       ),
     })
@@ -69,6 +73,7 @@ export default function StudioApp() {
       <BrainCanvas zoomDisplayRef={zoomRef} />
       <BrainTitle />
       <ThinkingPill />
+      <Narrator />
       <QuestionCard />
       <KeyRequestCard />
       <NodePalette />

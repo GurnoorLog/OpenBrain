@@ -31,6 +31,7 @@ export interface BrainNode {
   output?: Record<string, unknown>
   error?: string
   content?: string
+  reason?: string
 }
 
 export interface Connection {
@@ -84,6 +85,7 @@ export interface BrainNodeSpec {
   x: number
   y: number
   content?: string
+  reason?: string
 }
 
 export interface BrainSpec {

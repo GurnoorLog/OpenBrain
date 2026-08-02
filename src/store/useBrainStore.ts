@@ -103,6 +103,7 @@ export interface BrainStore {
   mode: EditorMode
   showGrid: boolean
   paletteOpen: boolean
+  designNarration: string
   selectedNodeIds: string[]
   nodes: BrainNode[]
   connections: Connection[]
@@ -144,6 +145,7 @@ export interface BrainStore {
   setMode: (mode: EditorMode) => void
   setShowGrid: (showGrid: boolean) => void
   setPaletteOpen: (paletteOpen: boolean) => void
+  setDesignNarration: (narration: string) => void
   setSelection: (ids: string[]) => void
   setRunning: (running: boolean) => void
   setActiveProvider: (providerId: ProviderId) => void
@@ -154,6 +156,10 @@ export interface BrainStore {
   resetStatuses: () => void
 
   setBrain: (spec: BrainSpec) => void
+  beginReveal: () => void
+  revealNode: (node: BrainNode) => void
+  revealConnection: (connection: Connection) => void
+  endReveal: () => void
   generateFromPrompt: (prompt: string, viewport: { width: number; height: number }) => void
   submitClarify: (answers: string[]) => void
   stopGeneration: () => void
@@ -179,6 +185,7 @@ export const useBrainStore = create<BrainStore>((set, get) => ({
   mode: 'select',
   showGrid: true,
   paletteOpen: false,
+  designNarration: '',
   selectedNodeIds: [],
   nodes: [],
   connections: [],
@@ -225,6 +232,8 @@ export const useBrainStore = create<BrainStore>((set, get) => ({
 
   setPaletteOpen: (paletteOpen) => set({ paletteOpen }),
 
+  setDesignNarration: (designNarration) => set({ designNarration }),
+
   setSelection: (selectedNodeIds) => set({ selectedNodeIds }),
 
   setRunning: (running) => set({ running }),
@@ -268,6 +277,26 @@ export const useBrainStore = create<BrainStore>((set, get) => ({
         future: [],
       }
     }),
+
+  beginReveal: () =>
+    set((state) => ({
+      nodes: [],
+      connections: [],
+      selectedNodeIds: [],
+      thinking: '',
+      designNarration: '',
+      past: state.nodes.length > 0 ? [...state.past, snapshot(state.nodes, state.connections)] : state.past,
+      future: [],
+    })),
+
+  revealNode: (node) =>
+    set((state) => ({ nodes: [...state.nodes, { ...node, status: 'idle' }], selectedNodeIds: [] })),
+
+  revealConnection: (connection) =>
+    set((state) => ({ connections: [...state.connections, connection] })),
+
+  endReveal: () =>
+    set((state) => ({ designNarration: '', fitToken: state.fitToken + 1, selectedNodeIds: [] })),
 
   generateFromPrompt: (prompt, viewport) => {
     if (get().generating) return

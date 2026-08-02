@@ -62,7 +62,7 @@ export default function Header() {
         await updateProject(user.id, projectId, {
           data: buildProjectData(
             projectPrompt ?? '',
-            nodes.map(({ id, type, x, y, content }) => ({ id, type, x, y, content })),
+            nodes.map(({ id, type, x, y, content, reason }) => ({ id, type, x, y, content, reason })),
             connections,
           ),
         })
