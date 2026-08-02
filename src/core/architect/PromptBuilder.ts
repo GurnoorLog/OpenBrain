@@ -29,9 +29,12 @@ export const NODE_CATALOG: readonly NodeCatalogEntry[] = [
   },
   {
     type: 'browser',
-    description: 'Fetch live web pages',
-    inputs: [],
-    outputs: [{ id: 'pages', label: 'Pages', kind: 'list' }],
+    description: 'Fetch the text of a live web page',
+    inputs: [{ id: 'url', label: 'URL', kind: 'text' }],
+    outputs: [
+      { id: 'pages', label: 'Pages', kind: 'list' },
+      { id: 'content', label: 'Content', kind: 'text' },
+    ],
   },
   {
     type: 'github',

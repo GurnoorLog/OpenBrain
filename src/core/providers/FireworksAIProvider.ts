@@ -89,6 +89,7 @@ export class FireworksAIProvider implements AIProvider {
         temperature: request.temperature ?? this.config.temperature,
         max_tokens: request.maxTokens ?? this.config.maxTokens,
       }),
+      signal: request.signal,
     })
     const text = await response.text()
     if (!response.ok) throw new Error(`Fireworks API HTTP ${response.status}: ${text.slice(0, 300)}`)
@@ -112,6 +113,7 @@ export class FireworksAIProvider implements AIProvider {
         max_tokens: request.maxTokens ?? this.config.maxTokens,
         stream: true,
       }),
+      signal: request.signal,
     })
     if (!response.ok || !response.body) {
       throw new Error(`Fireworks streaming failed: HTTP ${response.status}`)

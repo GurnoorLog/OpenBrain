@@ -5,7 +5,6 @@ import { NODE_HEADER, PORT_GAP } from '../../core/legacyArchitect'
 import { CAPABILITIES } from '../../core/registry'
 import { useBrainStore } from '../../store/useBrainStore'
 import type { CapabilityType } from '../../core/types'
-
 export type BrainNodeData = { capability: CapabilityType }
 export type BrainFlowNode = Node<BrainNodeData, 'brain'>
 
@@ -31,6 +30,11 @@ function BrainNodeComponent({ id, data, selected }: NodeProps<BrainFlowNode>) {
 
   if (!node) return null
 
+  const accent = capability?.accent ?? '#94a3b8'
+  const icon = capability?.icon ?? 'lucide:box'
+  const inputs = capability?.inputs ?? []
+  const outputs = capability?.outputs ?? []
+
   const classNames = [
     'node-card',
     node.status === 'running' ? 'status-running' : `status-${node.status}`,
@@ -44,13 +48,13 @@ function BrainNodeComponent({ id, data, selected }: NodeProps<BrainFlowNode>) {
       <div className="node-header">
         <span
           className="node-icon"
-          style={{ color: capability.accent, background: `${capability.accent}1f` }}
+          style={{ color: accent, background: `${accent}1f` }}
         >
-          <iconify-icon icon={capability.icon}></iconify-icon>
+          <iconify-icon icon={icon}></iconify-icon>
         </span>
         <span className="node-meta">
-          <span className="node-title">{capability.label}</span>
-          <span className="node-sub">{capability.description}</span>
+          <span className="node-title">{capability?.label ?? data.capability}</span>
+          <span className="node-sub">{capability?.description ?? 'Custom node'}</span>
         </span>
         <span className={`node-status-dot ${node.status}`} />
       </div>
@@ -58,24 +62,34 @@ function BrainNodeComponent({ id, data, selected }: NodeProps<BrainFlowNode>) {
         <div className="node-output">{summarizeOutput(node.output)}</div>
       )}
       {node.status === 'error' && node.error && <div className="node-error">{node.error}</div>}
-      {capability.inputs.map((port, index) => (
+      {data.capability === 'filesystem' && selected && (
+        <textarea
+          className="node-content-editor"
+          placeholder="Type file content for this node…"
+          defaultValue={node.content ?? ''}
+          onPointerDown={(e) => e.stopPropagation()}
+          onDoubleClick={(e) => e.stopPropagation()}
+          onChange={(e) => useBrainStore.getState().setNode(id, { content: e.target.value })}
+        />
+      )}
+      {inputs.map((port, index) => (
         <Handle
           key={port.id}
           id={port.id}
           type="target"
           position={Position.Left}
           title={port.label}
-          style={{ top: portTop(capability.inputs.length, index) }}
+          style={{ top: portTop(inputs.length, index) }}
         />
       ))}
-      {capability.outputs.map((port, index) => (
+      {outputs.map((port, index) => (
         <Handle
           key={port.id}
           id={port.id}
           type="source"
           position={Position.Right}
           title={port.label}
-          style={{ top: portTop(capability.outputs.length, index) }}
+          style={{ top: portTop(outputs.length, index) }}
         />
       ))}
     </div>

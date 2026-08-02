@@ -13,6 +13,7 @@ export interface MockExecutorsOptions {
 
 const rand = (max: number): number => Math.floor(Math.random() * max)
 
+// Compact one-line preview used for logs/output summaries (truncates long text).
 function firstValue(inputs: NodeInputs): string {
   const value = Object.values(inputs).find(
     (item) => typeof item === 'string' || typeof item === 'number',
@@ -20,6 +21,29 @@ function firstValue(inputs: NodeInputs): string {
   if (value === undefined) return ''
   const text = String(value)
   return text.length > 48 ? `${text.slice(0, 48)}…` : text
+}
+
+// Full-fidelity context for the LLM: prefers the longest textual value across
+// all inputs (strings, numbers, and lists flattened to text). No truncation —
+// truncating the prompt silently starves the model of context.
+function llmContext(inputs: NodeInputs): string {
+  const parts: string[] = []
+  for (const value of Object.values(inputs)) {
+    if (typeof value === 'string') parts.push(value)
+    else if (typeof value === 'number') parts.push(String(value))
+    else if (Array.isArray(value)) {
+      const text = value
+        .map((item) => {
+          if (typeof item === 'string') return item
+          if (typeof item === 'object' && item !== null) return JSON.stringify(item)
+          return String(item)
+        })
+        .join('\n')
+      parts.push(text)
+    }
+  }
+  const best = parts.slice().sort((a, b) => b.length - a.length)[0]
+  return best ?? ''
 }
 
 function delay(ms: number, signal?: AbortSignal): Promise<void> {
@@ -95,19 +119,20 @@ export class MockNodeExecutor implements NodeExecutor {
     const provider = this.options?.provider
     if (provider && provider.config.status === 'available') {
       context.log('LLM querying the configured AI provider.', { nodeId: context.currentNodeId })
-      const prompt = firstValue(inputs) || 'Respond briefly.'
+      const prompt = llmContext(inputs) || 'Respond briefly.'
       const completion = await provider.complete({
         messages: [{ role: 'user', content: prompt }],
         model: provider.config.model,
         temperature: provider.config.temperature,
         maxTokens: provider.config.maxTokens,
+        signal: context.signal,
       })
       return { response: completion.content }
     }
     await delay(900 + rand(300), context.signal)
-    const prompt = firstValue(inputs) || 'the available context'
-    context.log(`LLM reasoning over: ${prompt}`, { nodeId: context.currentNodeId })
-    return { response: `Draft response generated for "${prompt}"` }
+    const prompt = llmContext(inputs) || 'the available context'
+    context.log(`LLM reasoning over: ${prompt.slice(0, 80)}`, { nodeId: context.currentNodeId })
+    return { response: `Draft response generated for "${prompt.slice(0, 80)}"` }
   }
 
   private async memory(inputs: NodeInputs, context: ExecutionContext): Promise<NodeOutputs> {
@@ -138,6 +163,13 @@ export class MockNodeExecutor implements NodeExecutor {
 
   private async filesystem(context: ExecutionContext): Promise<NodeOutputs> {
     await delay(400 + rand(300), context.signal)
+    const node = context.brain.nodes.find((entry) => entry.id === context.currentNodeId)
+    const content =
+      typeof node?.configuration['content'] === 'string' ? node.configuration['content'] : ''
+    if (content.trim() !== '') {
+      context.log('Filesystem read user-provided content.', { nodeId: context.currentNodeId })
+      return { content }
+    }
     context.log('Filesystem read local files.', { nodeId: context.currentNodeId })
     return { content: '# README\n\nProject scaffold initialized.\n\n- 12 source files\n- 4 modules\n' }
   }

@@ -30,6 +30,7 @@ export interface BrainNode {
   status: NodeStatus
   output?: Record<string, unknown>
   error?: string
+  content?: string
 }
 
 export interface Connection {
@@ -82,6 +83,7 @@ export interface BrainNodeSpec {
   type: CapabilityType
   x: number
   y: number
+  content?: string
 }
 
 export interface BrainSpec {

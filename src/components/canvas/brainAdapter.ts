@@ -30,13 +30,13 @@ function toDomainNode(node: LegacyBrainNode): DomainBrainNode {
   return {
     id: node.id,
     type: node.type,
-    title: def.label,
-    description: def.description,
+    title: def?.label ?? node.type,
+    description: def?.description ?? 'Custom node',
     status: node.status,
     position: { x: node.x, y: node.y },
     inputs: catalog?.inputs ?? [],
     outputs: catalog?.outputs ?? [],
-    configuration: {},
+    configuration: node.content !== undefined ? { content: node.content } : {},
     metadata: {},
   }
 }

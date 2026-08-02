@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useBrainStore } from '../store/useBrainStore'
-import { clearToolKey, setToolKey } from '../core/tools/toolRegistry'
+import { setToolKey } from '../core/tools/toolRegistry'
+import { runBrain } from './canvas/executionAdapter'
 
 // Shown when a run needs an API key for a tool the user hasn't configured yet.
 // Password-style masked input + "how to get it" instructions from the tool
@@ -25,13 +26,13 @@ export default function KeyRequestCard() {
     setValue('')
     setError(null)
     addLog(`${request.name} API key saved`, 'success')
+    void runBrain()
   }
 
   const dismiss = () => {
     setPendingKeyRequest(null)
     setValue('')
     setError(null)
-    clearToolKey(request.toolId)
   }
 
   return (

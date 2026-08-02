@@ -72,15 +72,19 @@ export const CAPABILITIES: Record<CapabilityType, CapabilityDef> = {
     type: 'browser',
     label: 'Browser',
     icon: 'lucide:globe',
-    description: 'Fetch live web pages',
+    description: 'Fetch the text of a live web page',
     accent: '#60a5fa',
-    inputs: [],
-    outputs: [{ id: 'pages', label: 'Pages', type: 'list' }],
+    inputs: [{ id: 'url', label: 'URL', type: 'text' }],
+    outputs: [
+      { id: 'pages', label: 'Pages', type: 'list' },
+      { id: 'content', label: 'Content', type: 'text' },
+    ],
     async execute() {
       await sleep(600 + rand(400))
       return {
         outputs: {
-          pages: ['https://example.com', 'https://developer.mozilla.org'],
+          pages: [{ url: 'https://example.com', content: 'Example Domain' }],
+          content: 'Example Domain',
         },
       }
     },

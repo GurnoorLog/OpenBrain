@@ -7,7 +7,7 @@ export function exportBrain(): void {
     version: 1,
     exportedAt: new Date().toISOString(),
     brain: {
-      nodes: nodes.map(({ id, type, x, y }) => ({ id, type, x, y })),
+      nodes: nodes.map(({ id, type, x, y, content }) => ({ id, type, x, y, content })),
       connections,
     },
   }
@@ -27,7 +27,7 @@ export async function shareBrain(): Promise<void> {
     app: 'OpenBrain',
     version: 1,
     brain: {
-      nodes: nodes.map(({ id, type, x, y }) => ({ id, type, x, y })),
+      nodes: nodes.map(({ id, type, x, y, content }) => ({ id, type, x, y, content })),
       connections,
     },
   }

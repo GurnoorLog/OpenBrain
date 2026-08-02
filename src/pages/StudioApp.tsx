@@ -49,7 +49,7 @@ export default function StudioApp() {
     void updateProject(projectOwnerId, projectId, {
       data: buildProjectData(
         projectPrompt ?? '',
-        nodes.map(({ id, type, x, y }) => ({ id, type, x, y })),
+        nodes.map(({ id, type, x, y, content }) => ({ id, type, x, y, content })),
         connections,
       ),
     })

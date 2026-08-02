@@ -169,6 +169,7 @@ export const BROWSER_TOOL: ToolDefinition = {
   keyInstructions: [],
   inputs: [{ id: 'url', label: 'URL', kind: 'text' }],
   outputs: [
+    { id: 'pages', label: 'Pages', kind: 'list' },
     { id: 'content', label: 'Content', kind: 'text' },
     { id: 'url', label: 'URL', kind: 'text' },
   ],
@@ -187,7 +188,7 @@ export const BROWSER_TOOL: ToolDefinition = {
       level: 'success',
       nodeId: context.currentNodeId,
     })
-    return { content, url }
+    return { pages: [{ url, content }], content, url }
   },
 }
 

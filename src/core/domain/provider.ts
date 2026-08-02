@@ -90,6 +90,7 @@ export interface CompletionRequest {
   readonly tools?: readonly ToolDefinition[]
   readonly stop?: readonly string[]
   readonly responseFormat?: ResponseFormat
+  readonly signal?: AbortSignal
 }
 
 export interface CompletionResponse {

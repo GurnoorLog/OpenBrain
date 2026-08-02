@@ -370,6 +370,33 @@ body {
     border: 1px solid rgba(248, 113, 113, 0.15);
     color: #fca5a5;
   }
+
+  .node-content-editor {
+    display: block;
+    margin: 0 14px 12px;
+    padding: 8px 10px;
+    width: 190px;
+    min-height: 52px;
+    max-height: 120px;
+    resize: vertical;
+    border-radius: 8px;
+    font-family: var(--font-mono, ui-monospace, monospace);
+    font-size: 10px;
+    line-height: 1.5;
+    color: #e4e4e7;
+    background: rgba(0, 0, 0, 0.4);
+    border: 1px solid rgba(96, 165, 250, 0.25);
+    outline: none;
+  }
+
+  .node-content-editor:focus {
+    border-color: rgba(96, 165, 250, 0.6);
+    box-shadow: 0 0 0 2px rgba(96, 165, 250, 0.15);
+  }
+
+  .node-content-editor::placeholder {
+    color: #71717a;
+  }
 }
 
 .react-flow__handle {

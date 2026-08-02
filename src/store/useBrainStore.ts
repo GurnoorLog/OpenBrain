@@ -275,18 +275,22 @@ export const useBrainStore = create<BrainStore>((set, get) => ({
     const state = get()
     const clarify = state.clarify
     if (!clarify || state.generating) return
-    set({ clarify: null, generating: true })
     generationController?.abort()
-    void generateFromArchitect(clarify.prompt, clarify.viewport, undefined, answers).finally(() => {
-      generationController = null
-      set({ generating: false })
-    })
+    const controller = new AbortController()
+    generationController = controller
+    set({ clarify: null, generating: true })
+    void generateFromArchitect(clarify.prompt, clarify.viewport, controller.signal, answers).finally(
+      () => {
+        if (generationController === controller) generationController = null
+        set({ generating: false })
+      },
+    )
   },
 
   stopGeneration: () => {
     generationController?.abort()
     generationController = null
-    set({ generating: false, thinking: '' })
+    set({ generating: false, thinking: '', generationError: null, pendingQuestion: null, clarify: null })
   },
 
   addNode: (type, x, y) =>
