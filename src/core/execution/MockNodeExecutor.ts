@@ -68,6 +68,34 @@ function llmContext(inputs: NodeInputs): string {
   return parts.sort((a, b) => b.length - a.length).join('\n\n')
 }
 
+// The LLM also ingests the outputs of every other completed node that is NOT
+// already feeding it through an edge (labelled by node id). This guarantees
+// tool data reaches the analyst even when the architect wires a tool into
+// memory/output instead of directly into the llm node.
+function graphContext(context: ExecutionContext): string {
+  const llmNodeId = context.currentNodeId
+  const fedById = new Set(
+    context.brain.edges
+      .filter((edge) => edge.target === llmNodeId)
+      .map((edge) => edge.source),
+  )
+  const parts: string[] = []
+  for (const entry of context.brain.nodes) {
+    if (entry.id === llmNodeId || fedById.has(entry.id)) continue
+    const outputs = context.getNodeOutputs(entry.id)
+    if (!outputs) continue
+    const text = Object.entries(outputs)
+      .map(([key, value]) => {
+        const flat = flattenPart(value)
+        return flat.trim() !== '' ? `${key}: ${flat}` : ''
+      })
+      .filter((line) => line.trim() !== '')
+      .join('\n')
+    if (text.trim() !== '') parts.push(`[${entry.id}]\n${text}`)
+  }
+  return parts.join('\n\n')
+}
+
 function delay(ms: number, signal?: AbortSignal): Promise<void> {
   return new Promise((resolve, reject) => {
     let timeout: ReturnType<typeof setTimeout> | undefined
@@ -150,7 +178,11 @@ export class MockNodeExecutor implements NodeExecutor {
       node.configuration['userMessage'].trim() !== ''
         ? node.configuration['userMessage'].trim()
         : ''
-    const prompt = llmContext(inputs) || 'Respond briefly.'
+    const prompt =
+      [llmContext(inputs), graphContext(context)]
+        .map((part) => part.trim())
+        .filter((part) => part !== '')
+        .join('\n\n') || 'Respond briefly.'
     const userNote = userMessage !== '' ? `\n\nUser request: ${userMessage}` : ''
     const memoryNote =
       memoryHistory.trim() !== ''
