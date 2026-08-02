@@ -170,9 +170,7 @@ export class FireworksArchitect extends BaseArchitect {
       const decoder = new TextDecoder()
       let pending = ''
       let content = ''
-      let reasoning = ''
       const pushReasoning = flush((token) => {
-        reasoning += token
         onReasoning?.(token)
       })
 
@@ -204,7 +202,10 @@ export class FireworksArchitect extends BaseArchitect {
       if (content.trim() === '') {
         throw new ArchitectProviderError(this.id, 'Fireworks streaming returned an empty completion.')
       }
-      return { content, reasoning: reasoning || undefined }
+      // Reasoning was already delivered token-by-token to onReasoning during
+      // streaming; returning it again would make BaseArchitect re-send the full
+      // reasoning after the stream finishes (the thinking pill shows it twice).
+      return { content }
     } catch (error) {
       if (signal?.aborted) throw new ArchitectCancelledError()
       if (error instanceof DOMException && error.name === 'AbortError') {

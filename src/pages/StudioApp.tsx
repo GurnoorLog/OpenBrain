@@ -18,8 +18,6 @@ import { useBrainStore } from '../store/useBrainStore'
 import { updateProject, buildProjectData } from '../core/projects/projectsRepository'
 import { loadSharedBrain } from '../core/brainIo'
 
-let seeded = false
-
 export default function StudioApp() {
   const zoomRef = useRef<HTMLDivElement>(null)
   const projectId = useBrainStore((state) => state.projectId)
@@ -29,13 +27,16 @@ export default function StudioApp() {
   const connections = useBrainStore((state) => state.connections)
   const generating = useBrainStore((state) => state.generating)
 
-  // First mount only: if we opened a fresh project (has a prompt but no brain)
-  // or no project at all, kick off generation here in the studio where the
-  // thinking pill can stream the reasoning, then persist the result. A shared
-  // #brain= link takes priority and loads the graph instead of generating.
+  // Runs once per opened project: if the project has a prompt but no brain
+  // yet, kick off generation here in the studio where the thinking pill can
+  // stream the reasoning, then persist the result. A shared #brain= link takes
+  // priority and loads the graph instead of generating. Keyed to projectId so
+  // opening a second empty project still auto-generates (the old module-level
+  // flag made every project after the first render a blank canvas).
+  const seededProjectRef = useRef<string | null | undefined>(undefined)
   useEffect(() => {
-    if (seeded) return
-    seeded = true
+    if (seededProjectRef.current === projectId) return
+    seededProjectRef.current = projectId
     const state = useBrainStore.getState()
     if (state.nodes.length > 0) return
     if (loadSharedBrain()) return
@@ -43,30 +44,32 @@ export default function StudioApp() {
       state.projectPrompt ??
       'a research assistant with memory that browses the web, reads files, and produces a report'
     state.generateFromPrompt(prompt, { width: window.innerWidth, height: window.innerHeight })
-  }, [])
+  }, [projectId])
 
-  // Once a fresh generation completes (nodes appear + not generating), save the
-  // brain back to the open project so it survives a reload.
-  const savedRef = useRef(false)
+  // Keep the open project saved whenever the brain changes (once generation
+  // settles). Debounced so dragging nodes or typing in the inspector doesn't
+  // hammer Supabase with a write per keystroke. Previously the save ran at
+  // most once per mount, silently dropping every edit made afterwards.
   useEffect(() => {
-    if (savedRef.current) return
     if (!projectId || !projectOwnerId || generating || nodes.length === 0) return
-    savedRef.current = true
-    void updateProject(projectOwnerId, projectId, {
-      data: buildProjectData(
-        projectPrompt ?? '',
-        nodes.map(({ id, type, x, y, content, reason, model }) => ({
-          id,
-          type,
-          x,
-          y,
-          content,
-          reason,
-          model,
-        })),
-        connections,
-      ),
-    })
+    const timer = window.setTimeout(() => {
+      void updateProject(projectOwnerId, projectId, {
+        data: buildProjectData(
+          projectPrompt ?? '',
+          nodes.map(({ id, type, x, y, content, reason, model }) => ({
+            id,
+            type,
+            x,
+            y,
+            content,
+            reason,
+            model,
+          })),
+          connections,
+        ),
+      })
+    }, 1200)
+    return () => window.clearTimeout(timer)
   }, [projectId, projectPrompt, projectOwnerId, nodes, connections, generating])
 
   useEffect(() => {

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
-import { runBrain } from './canvas/executionAdapter'
-import { runBrainInCloud } from '../core/cloud/cloudExecutor'
+import { runBrain, stopBrainRun } from './canvas/executionAdapter'
+import { runBrainInCloud, stopRunInCloud } from '../core/cloud/cloudExecutor'
 import { exportBrain, shareBrain } from '../core/brainIo'
 import { useBrainStore } from '../store/useBrainStore'
 import { useAuth } from '../core/auth/useAuth'
@@ -151,6 +151,20 @@ export default function Header() {
         >
           <iconify-icon icon="lucide:cloud-cog" className="text-xl"></iconify-icon>
         </button>
+        {running && (
+          <button
+            id="nav-stop-btn"
+            className="toolbar-btn text-red-400 hover:text-red-300"
+            onClick={() => {
+              stopBrainRun()
+              stopRunInCloud()
+            }}
+            aria-label="Stop run"
+            title="Stop run"
+          >
+            <iconify-icon icon="lucide:square" className="text-xl"></iconify-icon>
+          </button>
+        )}
         <button id="nav-export-btn" className="nav-btn text-gray-300" onClick={exportBrain}>
           <iconify-icon icon="lucide:external-link" className="text-lg"></iconify-icon>
           Export

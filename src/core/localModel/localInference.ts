@@ -113,8 +113,14 @@ export async function runLocalInference(options: LocalInferenceOptions): Promise
     }
   }
 
-  // Trim the echoed prompt (instruct models often prepend it).
-  const trimmed = response.replace(prompt.trim(), '').trim()
+  // Trim an echoed prompt prefix (instruct models often prepend it) — but only
+  // when it is actually a prefix. Stripping a substring match anywhere would
+  // mangle models that reformat the prompt and leak the prompt into the output.
+  const promptText = prompt.trim()
+  let trimmed = response.trim()
+  if (promptText !== '' && trimmed.startsWith(promptText)) {
+    trimmed = trimmed.slice(promptText.length).trim()
+  }
   return {
     response: trimmed !== '' ? trimmed : response.trim() || 'Local model finished (empty response).',
     modelId,

@@ -1,4 +1,6 @@
 import { centerBrainView, clearBrainSelection, fitBrainView } from './canvas/flowInstance'
+import { stopBrainRun } from './canvas/executionAdapter'
+import { stopRunInCloud } from '../core/cloud/cloudExecutor'
 import { useBrainStore } from '../store/useBrainStore'
 
 // Single source of truth for every keyboard shortcut. App.tsx drives the
@@ -52,10 +54,14 @@ export const KEYBOARD_SHORTCUTS: readonly KeyboardShortcut[] = [
   {
     id: 'clear-selection',
     combo: 'Esc',
-    description: 'Clear selection',
+    description: 'Clear selection / stop a running brain',
     preventDefault: false,
     matches: (e) => e.key === 'Escape',
-    run: () => clearBrainSelection(),
+    run: () => {
+      clearBrainSelection()
+      stopBrainRun()
+      stopRunInCloud()
+    },
   },
   {
     id: 'fit-view',

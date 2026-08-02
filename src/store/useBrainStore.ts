@@ -271,15 +271,17 @@ export const useBrainStore = create<BrainStore>((set, get) => ({
     set((state) => {
       const nodes: BrainNode[] = spec.nodes.map((node) => ({ ...node, status: 'idle' }))
       const connections = spec.connections.map((connection) => ({ ...connection }))
-      const snapshotCurrent = snapshot(state.nodes, state.connections)
-      const past = state.nodes.length > 0 ? [...state.past, snapshotCurrent] : state.past
       return {
         nodes,
         connections,
         selectedNodeIds: [],
         thinking: '',
         fitToken: state.fitToken + 1,
-        past,
+        // A full brain replacement starts a fresh undo history. Snapshotting
+        // the previous project here put the OLD project's graph on the undo
+        // stack, so Ctrl+Z after opening a project resurrected the previous
+        // project's nodes.
+        past: [],
         future: [],
       }
     }),

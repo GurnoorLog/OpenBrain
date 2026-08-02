@@ -3,6 +3,24 @@ import type { BrainNodeSpec, Connection } from '../types'
 
 const CLOUD_TIMEOUT_MS = 150000
 
+interface CloudRunPayload {
+  ok?: boolean
+  error?: string
+  outputs?: Record<string, Record<string, unknown>>
+  order?: string[]
+  durationMs?: number
+  log?: { message: string; level?: string; nodeId?: string | null }[]
+}
+
+let cloudController: AbortController | null = null
+let cloudStopRequested = false
+
+// Aborts an in-flight cloud run. No-op when nothing is running.
+export function stopRunInCloud(): void {
+  cloudStopRequested = true
+  cloudController?.abort()
+}
+
 // Posts the current brain graph to the shared Render cloud executor and maps
 // its per-node results + run log back onto the store, so a "Run in cloud"
 // feels identical to a local run. The model API key stays server-side — the
@@ -21,6 +39,8 @@ export async function runBrainInCloud(): Promise<void> {
   }
 
   const controller = new AbortController()
+  cloudController = controller
+  cloudStopRequested = false
   const timeout = window.setTimeout(() => controller.abort(), CLOUD_TIMEOUT_MS)
 
   const brain: { nodes: BrainNodeSpec[]; connections: Connection[] } = {
@@ -50,17 +70,24 @@ export async function runBrainInCloud(): Promise<void> {
       body: JSON.stringify({ brain }),
       signal: controller.signal,
     })
-    const payload = (await response.json()) as {
-      ok?: boolean
-      error?: string
-      outputs?: Record<string, Record<string, unknown>>
-      order?: string[]
-      durationMs?: number
-      log?: { message: string; level?: string; nodeId?: string | null }[]
-    }
 
-    if (!response.ok || payload.ok === false) {
-      throw new Error(payload.error ?? `Cloud executor returned HTTP ${response.status}`)
+    // Defensive parse: Render's free tier can answer with an HTML error page
+    // (cold start / 502) instead of JSON. Never let JSON.parse throw and lose
+    // the whole response to a confusing "Unexpected token" message.
+    const text = await response.text()
+    let payload: CloudRunPayload | null = null
+    if (text.trim() !== '') {
+      try {
+        payload = JSON.parse(text) as CloudRunPayload
+      } catch {
+        payload = null
+      }
+    }
+    if (!response.ok || payload?.ok === false) {
+      throw new Error(payload?.error ?? `Cloud executor returned HTTP ${response.status}`)
+    }
+    if (payload === null) {
+      throw new Error(`Cloud executor returned an unparseable response (HTTP ${response.status})`)
     }
 
     for (const entry of payload.log ?? []) {
@@ -69,11 +96,11 @@ export async function runBrainInCloud(): Promise<void> {
     for (const [nodeId, outputs] of Object.entries(payload.outputs ?? {})) {
       store.setNode(nodeId, { status: 'success', output: outputs })
     }
-    for (const nodeId of payload.order ?? []) {
-      const node = useBrainStore.getState().nodes.find((entry) => entry.id === nodeId)
-      if (node && node.status === 'running' && !payload.outputs?.[nodeId]) {
-        store.setNode(nodeId, { status: 'success', output: node.output })
-      }
+    // A successful run means every node finished. Any node still marked
+    // running (the server may omit nodes with no output) is settled now, so
+    // nothing strands in the "running" state.
+    for (const node of useBrainStore.getState().nodes) {
+      if (node.status === 'running') store.setNode(node.id, { status: 'success' })
     }
     store.addLog(
       `Brain ran in the cloud in ${payload.durationMs ?? 0}ms — results written back`,
@@ -81,18 +108,26 @@ export async function runBrainInCloud(): Promise<void> {
     )
   } catch (error) {
     store.setRunning(false)
-    for (const node of useBrainStore.getState().nodes) {
-      if (node.status === 'running') store.setNode(node.id, { status: 'error' })
+    if (cloudStopRequested) {
+      for (const node of useBrainStore.getState().nodes) {
+        if (node.status === 'running') store.setNode(node.id, { status: 'idle' })
+      }
+      store.addLog('Cloud run stopped', 'warning')
+    } else {
+      for (const node of useBrainStore.getState().nodes) {
+        if (node.status === 'running') store.setNode(node.id, { status: 'error' })
+      }
+      const detail =
+        controller.signal.aborted
+          ? 'Cloud run timed out (no response within 150s)'
+          : error instanceof Error
+            ? error.message
+            : String(error)
+      store.addLog(`Cloud run failed: ${detail}`, 'error')
     }
-    const detail =
-      controller.signal.aborted
-        ? 'Cloud run timed out (no response within 150s)'
-        : error instanceof Error
-          ? error.message
-          : String(error)
-    store.addLog(`Cloud run failed: ${detail}`, 'error')
   } finally {
     window.clearTimeout(timeout)
+    if (cloudController === controller) cloudController = null
     store.setRunning(false)
   }
 }

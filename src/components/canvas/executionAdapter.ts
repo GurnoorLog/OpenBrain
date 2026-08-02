@@ -27,6 +27,13 @@ for (const tool of TOOLS) {
   executorRegistry.register(tool.nodeType, new ToolNodeExecutor(tool))
 }
 
+let activeEngine: ExecutionEngine | null = null
+
+// Aborts the currently running local brain (if any). No-op when idle.
+export function stopBrainRun(): void {
+  activeEngine?.stop()
+}
+
 function nodeLabel(nodeType: NodeType): string {
   return CAPABILITIES[nodeType as CapabilityType]?.label ?? nodeType
 }
@@ -65,6 +72,7 @@ export async function runBrain(): Promise<void> {
   const brain = toDomainBrain(store.nodes, store.connections)
   const events = new ExecutionEvents()
   const engine = new ExecutionEngine({ registry: executorRegistry, events })
+  activeEngine = engine
 
   const disposers: (() => void)[] = []
   disposers.push(
@@ -112,6 +120,7 @@ export async function runBrain(): Promise<void> {
       store.addLog(`Execution failed: ${error instanceof Error ? error.message : String(error)}`, 'error')
     }
   } finally {
+    activeEngine = null
     for (const dispose of disposers) dispose()
   }
 }
