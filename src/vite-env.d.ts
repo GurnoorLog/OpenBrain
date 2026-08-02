@@ -8,6 +8,7 @@ interface ImportMetaEnv {
   readonly VITE_CLOUD_EXECUTOR_URL?: string
   readonly VITE_COMPOSIO_API_KEY?: string
   readonly VITE_COMPOSIO_ACCOUNT_ID?: string
+  readonly VITE_COMPOSIO_ENTITY_ID?: string
 }
 
 interface ImportMeta {

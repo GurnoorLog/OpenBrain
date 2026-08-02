@@ -71,12 +71,22 @@ async function handleRun(req, res) {
     typeof payload.composioApiKey === 'string' && payload.composioApiKey.trim() !== ''
       ? payload.composioApiKey.trim()
       : ''
+  const composioAccountId =
+    typeof payload.composioAccountId === 'string' && payload.composioAccountId.trim() !== ''
+      ? payload.composioAccountId.trim()
+      : ''
+  const composioEntityId =
+    typeof payload.composioEntityId === 'string' && payload.composioEntityId.trim() !== ''
+      ? payload.composioEntityId.trim()
+      : ''
   try {
     const result = await executeBrain({
       nodes: brain.nodes,
       connections: Array.isArray(brain.connections) ? brain.connections : [],
       memory,
       composioApiKey,
+      composioAccountId,
+      composioEntityId,
     })
     send(res, 200, { ok: true, ...result })
   } catch (error) {
@@ -156,6 +166,9 @@ async function handleComposio(req, res) {
   const upstreamBody = { arguments: args, version: 'latest' }
   if (typeof payload.connected_account_id === 'string' && payload.connected_account_id !== '') {
     upstreamBody.connected_account_id = payload.connected_account_id
+  }
+  if (typeof payload.entity_id === 'string' && payload.entity_id !== '') {
+    upstreamBody.entity_id = payload.entity_id
   }
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), 45000)

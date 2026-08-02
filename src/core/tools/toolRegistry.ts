@@ -255,7 +255,13 @@ async function composioExecute(
 ): Promise<unknown> {
   const body: Record<string, unknown> = { arguments: args, version: 'latest' }
   const accountId = getComposioAccountId()
-  if (accountId) body.connected_account_id = accountId
+  if (accountId) {
+    body.connected_account_id = accountId
+    // GitHub (and other auth toolkits) need the owning user id alongside the
+    // connected account to identify it during execution.
+    const entityId = import.meta.env.VITE_COMPOSIO_ENTITY_ID as string | undefined
+    if (entityId && entityId.trim() !== '') body.entity_id = entityId
+  }
 
   const baseUrl = import.meta.env.VITE_CLOUD_EXECUTOR_URL as string | undefined
   if (baseUrl) {
