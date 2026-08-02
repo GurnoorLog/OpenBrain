@@ -29,27 +29,36 @@ function firstValue(inputs: NodeInputs): string {
   return text.length > 48 ? `${text.slice(0, 48)}…` : text
 }
 
-// Full-fidelity context for the LLM: prefers the longest textual value across
-// all inputs (strings, numbers, and lists flattened to text). No truncation —
-// truncating the prompt silently starves the model of context.
-function llmContext(inputs: NodeInputs): string {
-  const parts: string[] = []
-  for (const value of Object.values(inputs)) {
-    if (typeof value === 'string') parts.push(value)
-    else if (typeof value === 'number') parts.push(String(value))
-    else if (Array.isArray(value)) {
-      const text = value
-        .map((item) => {
-          if (typeof item === 'string') return item
-          if (typeof item === 'object' && item !== null) return JSON.stringify(item)
-          return String(item)
-        })
-        .join('\n')
-      parts.push(text)
-    }
+// Reduces any input value to clean text: page objects expose their "content"
+// field instead of being JSON-dumped, and nested lists flatten to lines.
+function flattenPart(value: unknown): string {
+  if (typeof value === 'string') return value
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value)
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => flattenPart(item))
+      .filter((line) => line.trim() !== '')
+      .join('\n')
   }
-  const best = parts.slice().sort((a, b) => b.length - a.length)[0]
-  return best ?? ''
+  if (typeof value === 'object' && value !== null) {
+    const record = value as Record<string, unknown>
+    if (typeof record['content'] === 'string') return record['content']
+    if (typeof record['text'] === 'string') return record['text']
+    return Object.entries(record)
+      .map(([key, v]) => `${key}: ${flattenPart(v)}`)
+      .join('\n')
+  }
+  return String(value)
+}
+
+// Full-fidelity context for the LLM: every input value flattened to text, with
+// the longest, most content-rich part FIRST so the model anchors on the real
+// data (e.g. a fetched article) instead of short scaffold/memory boilerplate.
+function llmContext(inputs: NodeInputs): string {
+  const parts = Object.values(inputs)
+    .map((value) => flattenPart(value))
+    .filter((part) => part.trim() !== '')
+  return parts.sort((a, b) => b.length - a.length).join('\n\n')
 }
 
 function delay(ms: number, signal?: AbortSignal): Promise<void> {
