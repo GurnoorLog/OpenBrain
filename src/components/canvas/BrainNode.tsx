@@ -1,10 +1,11 @@
-import { memo } from 'react'
+import { memo, useEffect, useState } from 'react'
 import { Handle, Position } from '@xyflow/react'
 import type { Node, NodeProps } from '@xyflow/react'
 import { NODE_HEADER, PORT_GAP } from '../../core/legacyArchitect'
 import { CAPABILITIES } from '../../core/registry'
 import { useBrainStore } from '../../store/useBrainStore'
 import type { CapabilityType } from '../../core/types'
+import { fetchModelCatalog, type ModelCatalogEntry } from '../../core/localModel'
 export type BrainNodeData = { capability: CapabilityType }
 export type BrainFlowNode = Node<BrainNodeData, 'brain'>
 
@@ -51,6 +52,49 @@ function NodeInspector({ output }: { output: Record<string, unknown> }) {
 
 function portTop(count: number, index: number): number {
   return NODE_HEADER / 2 + (index - (count - 1) / 2) * PORT_GAP
+}
+
+// Lets the user pick which open model a Local Model node runs. Loads the cloud
+// catalog; falls back to the bundled list so it always has choices.
+function LocalModelPicker({ nodeId, current }: { nodeId: string; current: string }) {
+  const [models, setModels] = useState<readonly ModelCatalogEntry[]>([])
+  const [loaded, setLoaded] = useState(false)
+
+  useEffect(() => {
+    let cancelled = false
+    void fetchModelCatalog().then((items) => {
+      if (cancelled) return
+      setModels(items)
+      setLoaded(true)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  const value =
+    models.find((model) => model.modelId === current)?.modelId ?? current
+
+  return (
+    <div className="node-model-picker" onPointerDown={(e) => e.stopPropagation()} onDoubleClick={(e) => e.stopPropagation()}>
+      <label className="node-model-label">Model</label>
+      {!loaded && <div className="node-model-loading">Loading catalog…</div>}
+      {loaded && (
+        <select
+          className="node-model-select"
+          value={value}
+          onChange={(e) => useBrainStore.getState().setNode(nodeId, { model: e.target.value })}
+        >
+          {models.map((model) => (
+            <option key={model.id} value={model.modelId}>
+              {model.name} — {model.sizeMb} MB
+            </option>
+          ))}
+        </select>
+      )}
+      <p className="node-model-hint">Runs in your browser. No API key. First run downloads once.</p>
+    </div>
+  )
 }
 
 function BrainNodeComponent({ id, data, selected }: NodeProps<BrainFlowNode>) {
@@ -103,6 +147,7 @@ function BrainNodeComponent({ id, data, selected }: NodeProps<BrainFlowNode>) {
           onChange={(e) => useBrainStore.getState().setNode(id, { content: e.target.value })}
         />
       )}
+      {data.capability === 'local' && selected && <LocalModelPicker nodeId={id} current={node.model ?? ''} />}
       {inputs.map((port, index) => (
         <Handle
           key={port.id}

@@ -14,6 +14,8 @@ export default function Toolbar() {
   const setMode = useBrainStore((state) => state.setMode)
   const paletteOpen = useBrainStore((state) => state.paletteOpen)
   const setPaletteOpen = useBrainStore((state) => state.setPaletteOpen)
+  const hubOpen = useBrainStore((state) => state.hubOpen)
+  const setHubOpen = useBrainStore((state) => state.setHubOpen)
   const setShowGrid = useBrainStore((state) => state.setShowGrid)
   const showGrid = useBrainStore((state) => state.showGrid)
   const { user } = useAuth()
@@ -36,7 +38,15 @@ export default function Toolbar() {
       await updateProject(user.id, projectId, {
         data: buildProjectData(
           projectPrompt ?? '',
-          nodes.map(({ id, type, x, y, content, reason }) => ({ id, type, x, y, content, reason })),
+          nodes.map(({ id, type, x, y, content, reason, model }) => ({
+            id,
+            type,
+            x,
+            y,
+            content,
+            reason,
+            model,
+          })),
           connections,
         ),
       })
@@ -75,6 +85,16 @@ export default function Toolbar() {
         title={paletteOpen ? 'Close node palette' : 'Open node palette'}
       >
         <iconify-icon icon="lucide:layout-grid"></iconify-icon>
+      </button>
+
+      <button
+        id="tool-hub-btn"
+        className={`toolbar-btn ${hubOpen ? 'active-tool' : ''}`}
+        onClick={() => setHubOpen(!hubOpen)}
+        aria-pressed={hubOpen}
+        title={hubOpen ? 'Close Model Hub' : 'Open Model Hub — run models in your browser'}
+      >
+        <iconify-icon icon="lucide:hard-drive-download"></iconify-icon>
       </button>
 
       <button

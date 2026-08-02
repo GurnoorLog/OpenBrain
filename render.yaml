@@ -1,0 +1,34 @@
+services:
+  - type: web
+    name: openbrain-cloud-executor
+    runtime: node
+    plan: free
+    rootDir: cloud-executor
+    buildCommand: npm install
+    startCommand: node server.js
+    healthCheckPath: /health
+    autoDeploy: false
+    envVars:
+      - key: FIREWORKS_API_KEY
+        sync: false
+      - key: CLOUD_LLM_MODEL
+        value: accounts/fireworks/models/deepseek-v4-flash
+
+workflows:
+  - name: openbrain-scheduled-brains
+    schedule: "0 9 * * *"
+    plan: free
+    rootDir: cloud-executor
+    buildCommand: npm install
+    command: node workflow.js
+    envVars:
+      - key: FIREWORKS_API_KEY
+        sync: false
+      - key: BRAIN_ID
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: CLOUD_LLM_MODEL
+        value: accounts/fireworks/models/deepseek-v4-flash

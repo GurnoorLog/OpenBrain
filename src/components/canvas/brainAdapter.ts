@@ -37,7 +37,10 @@ function toDomainNode(node: LegacyBrainNode): DomainBrainNode {
     position: { x: node.x, y: node.y },
     inputs: catalog?.inputs ?? [],
     outputs: catalog?.outputs ?? [],
-    configuration: node.content !== undefined ? { content: node.content } : {},
+    configuration: {
+      ...(node.content !== undefined ? { content: node.content } : {}),
+      ...(node.model !== undefined ? { model: node.model } : {}),
+    },
     metadata: {},
   }
 }

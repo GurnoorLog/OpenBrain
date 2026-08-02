@@ -27,7 +27,7 @@ export default function QuestionCard() {
 
   return (
     <div className="absolute left-4 top-1/2 -translate-y-1/2 z-40 w-96 pointer-events-auto thinking-slide-in">
-      <div className="bg-[#0d1117]/90 backdrop-blur border border-teal-400/25 rounded-2xl px-4 py-4 shadow-2xl">
+      <div className="flex max-h-[min(78vh,560px)] flex-col bg-[#0d1117]/90 backdrop-blur border border-teal-400/25 rounded-2xl px-4 py-4 shadow-2xl">
         <div className="flex items-center gap-2 mb-1">
           <iconify-icon icon="lucide:message-circle-question" className="text-teal-400 text-lg"></iconify-icon>
           <h3 className="text-white font-bold tracking-tight text-sm">A few questions first</h3>
@@ -36,7 +36,7 @@ export default function QuestionCard() {
           The architect wants to nail your intent before designing the brain.
         </p>
 
-        <div className="flex flex-col gap-3">
+        <div className="question-scroll flex flex-col gap-3">
           {clarify.questions.map((question, index) => (
             <div key={index}>
               <label className="text-xs text-gray-200 font-medium leading-snug">{question}</label>

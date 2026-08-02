@@ -16,6 +16,12 @@ export const NODE_CATALOG: readonly NodeCatalogEntry[] = [
     outputs: [{ id: 'response', label: 'Response', kind: 'text' }],
   },
   {
+    type: 'local',
+    description: 'Run a model in the browser, no API key',
+    inputs: [{ id: 'context', label: 'Context', kind: 'text' }],
+    outputs: [{ id: 'response', label: 'Response', kind: 'text' }],
+  },
+  {
     type: 'memory',
     description: 'Persist conversation context',
     inputs: [{ id: 'value', label: 'Value', kind: 'any' }],

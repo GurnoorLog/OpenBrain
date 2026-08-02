@@ -12,6 +12,7 @@ import Narrator from '../components/Narrator'
 import QuestionCard from '../components/QuestionCard'
 import KeyRequestCard from '../components/KeyRequestCard'
 import NodePalette from '../components/NodePalette'
+import ModelHub from '../components/ModelHub'
 import { runShortcut } from '../components/keyboardShortcuts'
 import { useBrainStore } from '../store/useBrainStore'
 import { updateProject, buildProjectData } from '../core/projects/projectsRepository'
@@ -54,7 +55,15 @@ export default function StudioApp() {
     void updateProject(projectOwnerId, projectId, {
       data: buildProjectData(
         projectPrompt ?? '',
-        nodes.map(({ id, type, x, y, content, reason }) => ({ id, type, x, y, content, reason })),
+        nodes.map(({ id, type, x, y, content, reason, model }) => ({
+          id,
+          type,
+          x,
+          y,
+          content,
+          reason,
+          model,
+        })),
         connections,
       ),
     })
@@ -77,6 +86,7 @@ export default function StudioApp() {
       <QuestionCard />
       <KeyRequestCard />
       <NodePalette />
+      <ModelHub />
       <FineTuneConfirmModal />
 
       {/* UI Layer */}

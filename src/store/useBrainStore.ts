@@ -103,6 +103,7 @@ export interface BrainStore {
   mode: EditorMode
   showGrid: boolean
   paletteOpen: boolean
+  hubOpen: boolean
   designNarration: string
   selectedNodeIds: string[]
   nodes: BrainNode[]
@@ -145,6 +146,7 @@ export interface BrainStore {
   setMode: (mode: EditorMode) => void
   setShowGrid: (showGrid: boolean) => void
   setPaletteOpen: (paletteOpen: boolean) => void
+  setHubOpen: (hubOpen: boolean) => void
   setDesignNarration: (narration: string) => void
   setSelection: (ids: string[]) => void
   setRunning: (running: boolean) => void
@@ -164,6 +166,7 @@ export interface BrainStore {
   submitClarify: (answers: string[]) => void
   stopGeneration: () => void
   addNode: (type: CapabilityType, x: number, y: number) => void
+  addLocalNode: (modelId: string, x: number, y: number) => void
   removeElements: (nodeIds: string[], connectionIds: string[]) => void
   removeNodes: (ids: string[]) => void
   removeConnections: (ids: string[]) => void
@@ -185,6 +188,7 @@ export const useBrainStore = create<BrainStore>((set, get) => ({
   mode: 'select',
   showGrid: true,
   paletteOpen: false,
+  hubOpen: false,
   designNarration: '',
   selectedNodeIds: [],
   nodes: [],
@@ -231,6 +235,8 @@ export const useBrainStore = create<BrainStore>((set, get) => ({
   setShowGrid: (showGrid) => set({ showGrid }),
 
   setPaletteOpen: (paletteOpen) => set({ paletteOpen }),
+
+  setHubOpen: (hubOpen) => set({ hubOpen }),
 
   setDesignNarration: (designNarration) => set({ designNarration }),
 
@@ -335,6 +341,24 @@ export const useBrainStore = create<BrainStore>((set, get) => ({
   addNode: (type, x, y) =>
     set((state) => {
       const node: BrainNode = { id: generateId('node'), type, x, y, status: 'idle' }
+      return {
+        nodes: [...state.nodes, node],
+        selectedNodeIds: [node.id],
+        past: [...state.past, snapshot(state.nodes, state.connections)],
+        future: [],
+      }
+    }),
+
+  addLocalNode: (modelId, x, y) =>
+    set((state) => {
+      const node: BrainNode = {
+        id: generateId('node'),
+        type: 'local',
+        x,
+        y,
+        status: 'idle',
+        model: modelId,
+      }
       return {
         nodes: [...state.nodes, node],
         selectedNodeIds: [node.id],

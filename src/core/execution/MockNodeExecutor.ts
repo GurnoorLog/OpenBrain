@@ -5,6 +5,7 @@ import type { ExecutionContext } from './ExecutionContext'
 import { getBrainMemoryStore } from '../memory/brainMemory'
 import type { BrainMemoryStore } from '../memory/brainMemory'
 import { buildRunReport, downloadReport } from '../report/buildRunReport'
+import { getFallbackCatalog, runLocalInference } from '../localModel'
 
 export interface MockNodeExecutorOptions {
   readonly provider?: AIProvider
@@ -85,6 +86,8 @@ export class MockNodeExecutor implements NodeExecutor {
     switch (this.type) {
       case 'llm':
         return this.llm(inputs, context)
+      case 'local':
+        return this.local(inputs, context)
       case 'memory':
         return this.memory(inputs, context)
       case 'planner':
@@ -143,6 +146,51 @@ export class MockNodeExecutor implements NodeExecutor {
     const logPrompt = `${prompt}${memoryNote}`.trim()
     context.log(`LLM reasoning over: ${logPrompt.slice(0, 80)}`, { nodeId: context.currentNodeId })
     return { response: `Draft response generated for "${logPrompt.slice(0, 80)}"` }
+  }
+
+  private async local(inputs: NodeInputs, context: ExecutionContext): Promise<NodeOutputs> {
+    const node = context.brain.nodes.find((entry) => entry.id === context.currentNodeId)
+    const configuredModel =
+      typeof node?.configuration['model'] === 'string' ? node.configuration['model'] : ''
+    const modelId =
+      configuredModel !== '' ? configuredModel : (getFallbackCatalog()[0]?.modelId ?? 'onnx-community/SmolLM2-135M-Instruct')
+    const prompt = llmContext(inputs) || 'Give a brief, friendly response.'
+    context.log(`Local model warming up (${modelId})…`, { nodeId: context.currentNodeId })
+    context.log('Local inference runs in your browser — no API key needed', {
+      nodeId: context.currentNodeId,
+    })
+    try {
+      const result = await runLocalInference({
+        modelId,
+        prompt,
+        maxNewTokens: 220,
+        signal: context.signal,
+        onProgress: (progress) => {
+          if (progress.phase === 'download') {
+            context.log(`Model ${progress.detail}`, { nodeId: context.currentNodeId })
+          } else if (progress.phase === 'generate') {
+            context.log('Local model generating…', { nodeId: context.currentNodeId })
+          }
+        },
+      })
+      context.log(`Local model answered in ${result.tokens} tokens.`, {
+        level: 'success',
+        nodeId: context.currentNodeId,
+      })
+      return { response: result.response, modelId }
+    } catch (error) {
+      if (context.signal.aborted) {
+        context.log('Local model stopped by user.', { level: 'warning', nodeId: context.currentNodeId })
+        return { response: '' }
+      }
+      const detail = error instanceof Error ? error.message : String(error)
+      context.log(`Local model failed: ${detail}`, { level: 'error', nodeId: context.currentNodeId })
+      return {
+        response: `Local model could not run on this device (${detail}).`,
+        modelId,
+        error: detail,
+      }
+    }
   }
 
   private async memory(inputs: NodeInputs, context: ExecutionContext): Promise<NodeOutputs> {

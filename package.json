@@ -11,6 +11,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@huggingface/transformers": "^4.2.0",
     "@supabase/supabase-js": "^2.111.0",
     "@xyflow/react": "^12.11.2",
     "react": "^19.2.8",

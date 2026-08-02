@@ -1,5 +1,6 @@
 export type CapabilityType =
   | 'llm'
+  | 'local'
   | 'memory'
   | 'planner'
   | 'browser'
@@ -32,6 +33,7 @@ export interface BrainNode {
   error?: string
   content?: string
   reason?: string
+  model?: string
 }
 
 export interface Connection {
@@ -86,6 +88,7 @@ export interface BrainNodeSpec {
   y: number
   content?: string
   reason?: string
+  model?: string
 }
 
 export interface BrainSpec {

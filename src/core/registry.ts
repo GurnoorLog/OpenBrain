@@ -32,6 +32,27 @@ export const CAPABILITIES: Record<CapabilityType, CapabilityDef> = {
       }
     },
   },
+  local: {
+    type: 'local',
+    label: 'Local Model',
+    icon: 'lucide:hard-drive-download',
+    description: 'Run a model in your browser — no API key',
+    accent: '#38bdf8',
+    inputs: [{ id: 'context', label: 'Context', type: 'text' }],
+    outputs: [{ id: 'response', label: 'Response', type: 'text' }],
+    async execute(ctx) {
+      await sleep(500 + rand(300))
+      const context = textOf(ctx.inputs)
+      ctx.log('Local model ready in browser (offline inference)', 'success')
+      return {
+        outputs: {
+          response: context
+            ? `Local: "${context.slice(0, 64)}${context.length > 64 ? '…' : ''}"`
+            : 'Local model generated a response.',
+        },
+      }
+    },
+  },
   memory: {
     type: 'memory',
     label: 'Memory',

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { runBrain } from './canvas/executionAdapter'
+import { runBrainInCloud } from '../core/cloud/cloudExecutor'
 import { exportBrain, shareBrain } from '../core/brainIo'
 import { useBrainStore } from '../store/useBrainStore'
 import { useAuth } from '../core/auth/useAuth'
@@ -62,7 +63,15 @@ export default function Header() {
         await updateProject(user.id, projectId, {
           data: buildProjectData(
             projectPrompt ?? '',
-            nodes.map(({ id, type, x, y, content, reason }) => ({ id, type, x, y, content, reason })),
+            nodes.map(({ id, type, x, y, content, reason, model }) => ({
+              id,
+              type,
+              x,
+              y,
+              content,
+              reason,
+              model,
+            })),
             connections,
           ),
         })
@@ -132,6 +141,15 @@ export default function Header() {
           title="Run brain"
         >
           <iconify-icon icon="lucide:play" className="text-xl"></iconify-icon>
+        </button>
+        <button
+          id="nav-cloud-btn"
+          className={`toolbar-btn hover:text-sky-400 ${running ? 'opacity-40 pointer-events-none' : ''}`}
+          onClick={() => void runBrainInCloud()}
+          aria-label="Run brain in the cloud (Render)"
+          title="Run brain in the cloud (Render)"
+        >
+          <iconify-icon icon="lucide:cloud-cog" className="text-xl"></iconify-icon>
         </button>
         <button id="nav-export-btn" className="nav-btn text-gray-300" onClick={exportBrain}>
           <iconify-icon icon="lucide:external-link" className="text-lg"></iconify-icon>
