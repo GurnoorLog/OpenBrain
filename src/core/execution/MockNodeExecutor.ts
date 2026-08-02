@@ -140,6 +140,15 @@ export class MockNodeExecutor implements NodeExecutor {
       memoryHistory.trim() !== ''
         ? `\n\n(From memory — prior runs of this brain:\n${memoryHistory.trim()})`
         : ''
+    // The architect stamps each llm node with a role/system prompt in
+    // configuration.instructions (e.g. "You are a research assistant…"), so the
+    // model knows what it is instead of answering as a generic chatbot.
+    const node = context.brain.nodes.find((entry) => entry.id === context.currentNodeId)
+    const configuredInstructions =
+      typeof node?.configuration['instructions'] === 'string' &&
+      node.configuration['instructions'].trim() !== ''
+        ? node.configuration['instructions'].trim()
+        : ''
     if (provider && provider.config.status === 'available') {
       context.log('LLM querying the configured AI provider.', { nodeId: context.currentNodeId })
       // Honor the model the architect/brain chose; fall back to the provider's
@@ -150,13 +159,13 @@ export class MockNodeExecutor implements NodeExecutor {
           ? brainProvider.model
           : provider.config.model
       const completion = await provider.complete({
-        // Default system prompt: match the user's language so a Chinese-origin
-        // model (deepseek) doesn't answer casual English input in Chinese.
         messages: [
           {
             role: 'system',
             content:
-              'You are OpenBrain, an AI agent. Reply in the same language the user wrote in; be concise and useful.',
+              configuredInstructions !== ''
+                ? configuredInstructions
+                : 'You are OpenBrain, an AI agent. Reply in the same language the user wrote in; be concise and useful.',
           },
           { role: 'user', content: `${prompt}${memoryNote}` },
         ],
