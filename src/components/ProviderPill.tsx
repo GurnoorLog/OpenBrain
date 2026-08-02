@@ -90,7 +90,7 @@ export default function ProviderPill() {
       </button>
 
       <div
-        className={`menu-dropdown absolute right-0 bottom-full mb-2 w-64 glass-panel p-2 z-50 ${open ? 'active' : ''}`}
+        className={`menu-dropdown absolute right-0 bottom-full mb-2 w-72 glass-panel p-2 z-50 max-h-[min(62vh,430px)] overflow-y-auto ${open ? 'active' : ''}`}
         style={{ transformOrigin: 'bottom right' }}
       >
         <div className="px-3 pt-2 pb-1 text-[10px] uppercase tracking-widest text-gray-500 font-bold">
