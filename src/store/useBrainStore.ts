@@ -101,6 +101,7 @@ export function canConnect(
 export interface BrainStore {
   view: ViewState
   mode: EditorMode
+  showGrid: boolean
   selectedNodeIds: string[]
   nodes: BrainNode[]
   connections: Connection[]
@@ -140,6 +141,7 @@ export interface BrainStore {
   setClarify: (state: ClarifyState | null) => void
   setView: (view: Partial<ViewState>) => void
   setMode: (mode: EditorMode) => void
+  setShowGrid: (showGrid: boolean) => void
   setSelection: (ids: string[]) => void
   setRunning: (running: boolean) => void
   setActiveProvider: (providerId: ProviderId) => void
@@ -173,6 +175,7 @@ const DEFAULT_VIEW: ViewState = { scale: 1, x: 0, y: 0 }
 export const useBrainStore = create<BrainStore>((set, get) => ({
   view: DEFAULT_VIEW,
   mode: 'select',
+  showGrid: true,
   selectedNodeIds: [],
   nodes: [],
   connections: [],
@@ -214,6 +217,8 @@ export const useBrainStore = create<BrainStore>((set, get) => ({
   setView: (view) => set((state) => ({ view: { ...state.view, ...view } })),
 
   setMode: (mode) => set({ mode }),
+
+  setShowGrid: (showGrid) => set({ showGrid }),
 
   setSelection: (selectedNodeIds) => set({ selectedNodeIds }),
 

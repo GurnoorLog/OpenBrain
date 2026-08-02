@@ -23,3 +23,12 @@ export function clearBrainSelection(): void {
   }
   useBrainStore.getState().setSelection([])
 }
+
+// Converts a screen-space point (clientX/clientY) into canvas flow coordinates
+// so dragged palette nodes can be dropped exactly where the user releases.
+export function screenToFlowPosition(point: { x: number; y: number }): { x: number; y: number } {
+  if (instance) {
+    return instance.screenToFlowPosition(point)
+  }
+  return { x: point.x, y: point.y }
+}

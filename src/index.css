@@ -217,6 +217,100 @@ body {
     box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.1);
   }
 
+  .palette-scroll {
+    max-height: calc(100vh - 320px);
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.15) transparent;
+  }
+
+  .palette-scroll::-webkit-scrollbar {
+    width: 4px;
+  }
+
+  .palette-scroll::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.15);
+    border-radius: 9999px;
+  }
+
+  .node-palette-btn {
+    cursor: grab;
+  }
+
+  .node-palette-btn:active {
+    cursor: grabbing;
+  }
+
+  .node-palette-btn:hover iconify-icon {
+    transform: scale(1.15);
+  }
+
+  .node-palette-btn iconify-icon {
+    transition: transform 0.15s ease;
+  }
+
+  .toolbar-node .toolbar-tooltip {
+    position: absolute;
+    right: calc(100% + 12px);
+    top: 50%;
+    transform: translateY(-50%);
+    min-width: 180px;
+    max-width: 220px;
+    padding: 8px 10px;
+    border-radius: 10px;
+    background: rgba(10, 10, 14, 0.96);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.15s ease;
+    z-index: 60;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .toolbar-node:hover .toolbar-tooltip {
+    opacity: 1;
+  }
+
+  .toolbar-tooltip-label {
+    font-size: 11px;
+    font-weight: 700;
+    color: #ffffff;
+  }
+
+  .toolbar-tooltip-desc {
+    font-size: 10px;
+    color: #a1a1aa;
+    line-height: 1.35;
+  }
+
+  .toolbar-tooltip-hint {
+    font-size: 9px;
+    color: #71717a;
+    margin-top: 2px;
+  }
+
+  .canvas-container.palette-dragging::after {
+    content: 'Drop to add node';
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.85);
+    background: rgba(45, 212, 191, 0.06);
+    border: 2px dashed rgba(45, 212, 191, 0.5);
+    border-radius: 12px;
+    pointer-events: none;
+    z-index: 5;
+  }
+
   .agent-log-content {
     max-height: 0;
     overflow: hidden;

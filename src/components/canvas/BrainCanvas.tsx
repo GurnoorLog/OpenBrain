@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react'
 import type { RefObject } from 'react'
 import { Background, BackgroundVariant, ReactFlow, SelectionMode } from '@xyflow/react'
 import { useBrainStore } from '../../store/useBrainStore'
+import type { CapabilityType } from '../../core/types'
+import { screenToFlowPosition } from './flowInstance'
 import { NODE_TYPES, useBrainFlow } from './useBrainFlow'
 
 interface BrainCanvasProps {
@@ -20,7 +22,9 @@ function isEditableTarget(target: EventTarget | null): boolean {
 
 export default function BrainCanvas({ zoomDisplayRef }: BrainCanvasProps) {
   const mode = useBrainStore((state) => state.mode)
+  const showGrid = useBrainStore((state) => state.showGrid)
   const [spaceHeld, setSpaceHeld] = useState(false)
+  const [dragOver, setDragOver] = useState(false)
   const {
     rfNodes,
     rfEdges,
@@ -55,8 +59,31 @@ export default function BrainCanvas({ zoomDisplayRef }: BrainCanvasProps) {
 
   const panning = mode === 'pan' || spaceHeld
 
+  const onDragOver = (e: React.DragEvent) => {
+    if (!e.dataTransfer.types.includes('text/plain')) return
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'copy'
+    setDragOver(true)
+  }
+
+  const onDragLeave = () => setDragOver(false)
+
+  const onDrop = (e: React.DragEvent) => {
+    e.preventDefault()
+    setDragOver(false)
+    const capability = e.dataTransfer.getData('text/plain') as CapabilityType
+    if (!capability) return
+    const position = screenToFlowPosition({ x: e.clientX, y: e.clientY })
+    useBrainStore.getState().addNode(capability, position.x, position.y)
+  }
+
   return (
-    <div className={`canvas-container ${panning ? 'pan-mode' : ''}`}>
+    <div
+      className={`canvas-container ${panning ? 'pan-mode' : ''} ${dragOver ? 'palette-dragging' : ''}`}
+      onDragOver={onDragOver}
+      onDragLeave={onDragLeave}
+      onDrop={onDrop}
+    >
       <ReactFlow
         nodes={rfNodes}
         edges={rfEdges}
@@ -84,12 +111,14 @@ export default function BrainCanvas({ zoomDisplayRef }: BrainCanvasProps) {
         fitViewOptions={{ padding: 0.2 }}
         proOptions={{ hideAttribution: true }}
       >
-        <Background
-          variant={BackgroundVariant.Dots}
-          gap={32}
-          size={1}
-          color="rgba(255, 255, 255, 0.06)"
-        />
+        {showGrid && (
+          <Background
+            variant={BackgroundVariant.Dots}
+            gap={32}
+            size={1}
+            color="rgba(255, 255, 255, 0.06)"
+          />
+        )}
       </ReactFlow>
     </div>
   )
