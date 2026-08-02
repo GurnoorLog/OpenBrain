@@ -37,7 +37,7 @@ export class FireworksArchitect extends BaseArchitect {
     this.baseUrl = (options.baseUrl ?? FIREWORKS_BASE_URL).replace(/\/+$/, '')
     this.defaultModel = options.defaultModel ?? FIREWORKS_DEFAULT_MODEL
     this.apiKey = options.apiKey ?? readEnvKey('VITE_FIREWORKS_API_KEY')
-    this.timeoutMs = options.timeoutMs ?? 60_000
+    this.timeoutMs = options.timeoutMs ?? 120_000
   }
 
   // The model actually used for design/answers. Respects the model picked in
