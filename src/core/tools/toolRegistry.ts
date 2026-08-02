@@ -84,8 +84,12 @@ async function fetchViaProxy(url: string, signal: AbortSignal): Promise<string> 
         { signal },
       )
       if (response.ok) {
-        const text = await response.text()
-        if (text.trim() !== '') return text
+        // The /fetch endpoint returns { ok, url, text } — unwrap it so the
+        // browser node gets the page text, not the JSON envelope.
+        const data = (await response.json().catch(() => null)) as { text?: string } | null
+        if (data && typeof data.text === 'string' && data.text.trim() !== '') {
+          return data.text
+        }
       }
     } catch {
       /* try the next relay */
