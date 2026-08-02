@@ -3,6 +3,7 @@ import { createDefaultKnowledge, createDefaultMemory, DEFAULT_LOCAL_PROVIDER, DE
 import type { BrainFactory } from '../brain/factory'
 import type { BrainSpecification, KnowledgeRecommendation, MemoryRecommendation, SpecificationEdge, SpecificationNode } from './BrainSpecification'
 import { getNodeCatalogEntry } from './PromptBuilder'
+import { FIREWORKS_MODELS, isFireworksModel } from '../providers/fireworksModels'
 
 const COLUMN_WIDTH = 260
 const ROW_HEIGHT = 140
@@ -17,7 +18,7 @@ export class SpecificationTransformer {
   constructor(private readonly factory: BrainFactory) {}
 
   transform(specification: BrainSpecification, options: TransformOptions = {}): Brain {
-    const provider = options.provider ?? this.resolveProvider(specification.providerRecommendation)
+    const provider = options.provider ?? this.resolveProvider(specification.providerRecommendation, specification.modelRecommendation)
     const nodes = specification.nodes.map((node, index) => this.toDomainNode(node, index))
     const edges = specification.edges.map((edge) => this.toDomainEdge(edge, nodes))
 
@@ -100,7 +101,16 @@ export class SpecificationTransformer {
     return { ...base, sources, embeddingModel: recommendation.embeddingModel ?? '' }
   }
 
-  private resolveProvider(providerId: string): ProviderConfiguration {
-    return providerId === 'ollama' ? DEFAULT_LOCAL_PROVIDER : DEFAULT_PROVIDER
+  private resolveProvider(providerId: string, modelRecommendation?: string): ProviderConfiguration {
+    if (providerId === 'ollama') return DEFAULT_LOCAL_PROVIDER
+    const base = { ...DEFAULT_PROVIDER }
+    const model =
+      modelRecommendation !== undefined &&
+      modelRecommendation.trim() !== '' &&
+      isFireworksModel(modelRecommendation.trim())
+        ? modelRecommendation.trim()
+        : FIREWORKS_MODELS[0]?.id ?? DEFAULT_PROVIDER.model
+    base.model = model
+    return base
   }
 }

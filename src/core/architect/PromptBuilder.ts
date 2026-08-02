@@ -1,5 +1,6 @@
 import type { NodePort, NodeType, ProviderConfiguration, ProviderId, ProviderKind, ProviderMessage } from '../domain'
 import type { DesignRequest } from './ArchitectProvider'
+import { FIREWORKS_MODELS } from '../providers/fireworksModels'
 
 export interface NodeCatalogEntry {
   readonly type: NodeType
@@ -35,7 +36,8 @@ export const NODE_CATALOG: readonly NodeCatalogEntry[] = [
   },
   {
     type: 'browser',
-    description: 'Fetch the text of a live web page',
+    description:
+      'Fetch the text of a live web page. MUST set the concrete page URL in "configuration" as { "url": "https://..." } — use the exact page the user names (e.g. a Wikipedia article)',
     inputs: [{ id: 'url', label: 'URL', kind: 'text' }],
     outputs: [
       { id: 'pages', label: 'Pages', kind: 'list' },
@@ -237,6 +239,11 @@ export class PromptBuilder {
 
   private providerCatalogPrompt(active?: ProviderConfiguration): string {
     const lines = PROVIDER_CATALOG.map((entry) => `- ${entry.id} (${entry.kind}, default model: ${entry.defaultModel})`)
+    const modelOptions = FIREWORKS_MODELS.map(
+      (model) => `  - ${model.id}${model.recommended ? ' (recommended default)' : ''}: ${model.name} — ${model.description}`,
+    )
+    lines.push('Fireworks AI models you may recommend in "modelRecommendation" (pick the one best matching the request\'s complexity):')
+    lines.push(...modelOptions)
     if (active) {
       lines.push(`Active provider for this design: ${active.providerId} (model: ${active.model}).`)
     }

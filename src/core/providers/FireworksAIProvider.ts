@@ -11,7 +11,8 @@ import type {
   ProviderHealth,
   ProviderMessage,
 } from '../domain'
-import { FIREWORKS_BASE_URL, FIREWORKS_DEFAULT_MODEL } from '../architect/FireworksArchitect'
+import { FIREWORKS_BASE_URL } from '../architect/FireworksArchitect'
+import { FIREWORKS_DEFAULT_MODEL_ID, FIREWORKS_MODELS } from './fireworksModels'
 
 function readEnvKey(name: string): string | null {
   const env = (import.meta as { env?: Readonly<Record<string, string | undefined>> }).env
@@ -49,7 +50,7 @@ export class FireworksAIProvider implements AIProvider {
   constructor() {
     this.apiKey = readEnvKey('VITE_FIREWORKS_API_KEY')
     this.baseUrl = FIREWORKS_BASE_URL
-    this.model = FIREWORKS_DEFAULT_MODEL
+    this.model = FIREWORKS_DEFAULT_MODEL_ID
     this.descriptor = {
       id: 'fireworks',
       name: 'Fireworks AI',
@@ -57,7 +58,16 @@ export class FireworksAIProvider implements AIProvider {
       requiresApiKey: true,
       defaultBaseUrl: this.baseUrl,
       defaultModel: this.model,
-      models: [],
+      models: FIREWORKS_MODELS.map((model) => ({
+        id: model.id,
+        name: model.name,
+        contextWindow: model.contextWindow,
+        maxTokens: model.maxTokens,
+        vision: false,
+        toolCalling: true,
+        embedding: false,
+        streaming: true,
+      })),
     }
     this.config = {
       providerId: 'fireworks',

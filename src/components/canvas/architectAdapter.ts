@@ -11,6 +11,8 @@ import {
 } from '../../core/architect'
 import { useBrainStore } from '../../store/useBrainStore'
 import { isFinetuneIntent, planFineTune } from './finetuneAdapter'
+import { isFireworksModel } from '../../core/providers/fireworksModels'
+import { DEFAULT_PROVIDER } from '../../core/brain/defaults'
 import type { Brain, ProviderHealth, ProviderId } from '../../core/domain'
 import type { BrainSpec, CapabilityType } from '../../core/types'
 import type { ArchitectProvider, SpecificationNode } from '../../core/architect'
@@ -93,6 +95,30 @@ export function isFireworksApiKeyConfigured(): boolean {
 
 export function getActiveProviderId(): ProviderId {
   return useBrainStore.getState().activeProviderId
+}
+
+const FIREWORKS_MODEL_KEY = 'openbrain:fireworks-model'
+
+// The Fireworks model chosen in Settings, or null when the user hasn't
+// overridden the default. This drives the architect's model AND the model
+// baked into newly generated brains.
+export function getSelectedFireworksModel(): string | null {
+  try {
+    const value = localStorage.getItem(FIREWORKS_MODEL_KEY)
+    return value !== null && isFireworksModel(value) ? value : null
+  } catch {
+    return null
+  }
+}
+
+export function setSelectedFireworksModel(modelId: string): void {
+  try {
+    if (isFireworksModel(modelId)) {
+      localStorage.setItem(FIREWORKS_MODEL_KEY, modelId)
+    }
+  } catch {
+    /* storage unavailable — ignore */
+  }
 }
 
 export interface ProviderOverview {
@@ -184,10 +210,15 @@ export async function generateFromPrompt(
 
   try {
     const providerId = getActiveProviderId()
+    const selectedModel = getSelectedFireworksModel()
     const specification = await architect.design(
       {
         prompt: enrichedPrompt,
         signal,
+        context:
+          providerId === 'fireworks' && selectedModel !== null
+            ? { providerId, model: selectedModel }
+            : undefined,
         onReasoning: (reasoning) => {
           reasoningBuffer += reasoning
           store.setThinking(reasoningBuffer.trim())
@@ -195,7 +226,14 @@ export async function generateFromPrompt(
       },
       providerId,
     )
-    const brain = architect.materialize(specification)
+    // The Settings model pick is authoritative: bake it into the brain's
+    // provider so the LLM executor uses it, overriding the architect's own
+    // modelRecommendation.
+    const providerOverride =
+      providerId === 'fireworks' && selectedModel !== null
+        ? { ...DEFAULT_PROVIDER, model: selectedModel }
+        : undefined
+    const brain = architect.materialize(specification, providerOverride)
     const spec = toLegacyBrainSpec(brain)
     await revealBrainDesign(spec, specification.nodes, signal)
     store.setBrainTitle(deriveTitle(prompt))

@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
 import type { ProviderStatus } from '../core/domain'
 import { PROVIDER_CATALOG } from '../core/architect'
-import { getActiveProviderId, isFireworksApiKeyConfigured, listProviderHealth } from './canvas/architectAdapter'
+import { getActiveProviderId, isFireworksApiKeyConfigured, listProviderHealth, getSelectedFireworksModel, setSelectedFireworksModel } from './canvas/architectAdapter'
 import { isHfTokenConfigured } from './canvas/finetuneAdapter'
 import { TOOLS } from '../core/tools/toolRegistry'
+import { FIREWORKS_MODELS } from '../core/providers/fireworksModels'
 import type { ProviderOverview } from './canvas/architectAdapter'
 
 const STATUS_LABEL: Readonly<Record<ProviderStatus, string>> = {
@@ -34,12 +35,14 @@ export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
   const [overviews, setOverviews] = useState<readonly ProviderOverview[]>([])
   const [fireworksKeySet, setFireworksKeySet] = useState(false)
   const [hfTokenSet, setHfTokenSet] = useState(false)
+  const [selectedModel, setSelectedModel] = useState<string>(() => getSelectedFireworksModel() ?? FIREWORKS_MODELS[0].id)
 
   useEffect(() => {
     if (!open) return
     let cancelled = false
     setFireworksKeySet(isFireworksApiKeyConfigured())
     setHfTokenSet(isHfTokenConfigured())
+    setSelectedModel(getSelectedFireworksModel() ?? FIREWORKS_MODELS[0].id)
     void listProviderHealth().then((result) => {
       if (!cancelled) setOverviews(result)
     })
@@ -107,6 +110,48 @@ export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
                     )}
                   </div>
                 </div>
+              )
+            })}
+          </div>
+        </div>
+
+        <div className="mb-4">
+          <div className="text-[10px] uppercase tracking-widest text-gray-500 font-bold mb-1.5">
+            Fireworks model
+          </div>
+          <div className="flex flex-col gap-1.5 max-h-56 overflow-y-auto pr-1">
+            {FIREWORKS_MODELS.map((model) => {
+              const selected = model.id === selectedModel
+              return (
+                <button
+                  key={model.id}
+                  onClick={() => {
+                    setSelectedModel(model.id)
+                    setSelectedFireworksModel(model.id)
+                  }}
+                  className={`flex items-start gap-2.5 px-3 py-2 rounded-lg text-left border transition-colors ${
+                    selected
+                      ? 'bg-teal-400/10 border-teal-400/40'
+                      : 'bg-white/5 border-white/10 hover:border-white/25'
+                  }`}
+                >
+                  <span
+                    className={`mt-0.5 w-3 h-3 rounded-full shrink-0 border ${
+                      selected ? 'bg-teal-400 border-teal-400' : 'border-gray-500'
+                    }`}
+                  ></span>
+                  <span>
+                    <span className="flex items-center gap-2">
+                      <span className="text-sm text-gray-100 font-medium">{model.name}</span>
+                      {model.recommended ? (
+                        <span className="text-[9px] uppercase tracking-wider text-teal-300 font-bold">
+                          Default
+                        </span>
+                      ) : null}
+                    </span>
+                    <span className="block text-[11px] text-gray-500 mt-0.5">{model.description}</span>
+                  </span>
+                </button>
               )
             })}
           </div>

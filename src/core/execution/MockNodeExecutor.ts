@@ -142,6 +142,13 @@ export class MockNodeExecutor implements NodeExecutor {
         : ''
     if (provider && provider.config.status === 'available') {
       context.log('LLM querying the configured AI provider.', { nodeId: context.currentNodeId })
+      // Honor the model the architect/brain chose; fall back to the provider's
+      // own default so a brain without an explicit model still works.
+      const brainProvider = context.brain?.provider
+      const model =
+        brainProvider?.model && brainProvider.model.trim() !== ''
+          ? brainProvider.model
+          : provider.config.model
       const completion = await provider.complete({
         // Default system prompt: match the user's language so a Chinese-origin
         // model (deepseek) doesn't answer casual English input in Chinese.
@@ -153,9 +160,9 @@ export class MockNodeExecutor implements NodeExecutor {
           },
           { role: 'user', content: `${prompt}${memoryNote}` },
         ],
-        model: provider.config.model,
+        model,
         temperature: provider.config.temperature,
-        maxTokens: provider.config.maxTokens,
+        maxTokens: brainProvider?.maxTokens ?? provider.config.maxTokens,
         signal: context.signal,
       })
       return { response: completion.content }

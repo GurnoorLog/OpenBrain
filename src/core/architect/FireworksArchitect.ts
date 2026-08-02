@@ -5,8 +5,12 @@ import type { ModelResult } from './ArchitectProvider'
 import type { PromptBuilder, StructuredPrompt } from './PromptBuilder'
 import type { SpecificationValidator } from './SpecificationValidator'
 
+import { FIREWORKS_DEFAULT_MODEL_ID, isFireworksModel } from '../providers/fireworksModels'
+
 export const FIREWORKS_BASE_URL = 'https://api.fireworks.ai/inference/v1'
-export const FIREWORKS_DEFAULT_MODEL = 'accounts/fireworks/models/deepseek-v4-flash'
+export const FIREWORKS_DEFAULT_MODEL = FIREWORKS_DEFAULT_MODEL_ID
+
+const FIREWORKS_MODEL_KEY = 'openbrain:fireworks-model'
 
 export interface FireworksArchitectOptions {
   readonly apiKey?: string | null
@@ -34,6 +38,19 @@ export class FireworksArchitect extends BaseArchitect {
     this.defaultModel = options.defaultModel ?? FIREWORKS_DEFAULT_MODEL
     this.apiKey = options.apiKey ?? readEnvKey('VITE_FIREWORKS_API_KEY')
     this.timeoutMs = options.timeoutMs ?? 60_000
+  }
+
+  // The model actually used for design/answers. Respects the model picked in
+  // Settings (persisted per user) so "give me a more powerful model" isn't
+  // hardcoded; falls back to the provider default.
+  private activeModel(): string {
+    try {
+      const selected = localStorage.getItem(FIREWORKS_MODEL_KEY)
+      if (selected !== null && isFireworksModel(selected)) return selected
+    } catch {
+      /* storage unavailable — use the default */
+    }
+    return this.activeModel()
   }
 
   override async health(): Promise<ProviderHealth> {
@@ -72,7 +89,7 @@ export class FireworksArchitect extends BaseArchitect {
       const data = await invokeJson(`${this.baseUrl}/chat/completions`, {
         headers: this.authHeaders(),
         body: {
-          model: this.defaultModel,
+          model: this.activeModel(),
           messages: [
             {
               role: 'system',
@@ -115,7 +132,7 @@ export class FireworksArchitect extends BaseArchitect {
     const data = await invokeJson(`${this.baseUrl}/chat/completions`, {
       headers: this.authHeaders(),
       body: {
-        model: this.defaultModel,
+        model: this.activeModel(),
         messages: prompt.messages,
         temperature: prompt.temperature,
         max_tokens: prompt.maxTokens,
@@ -154,7 +171,7 @@ export class FireworksArchitect extends BaseArchitect {
         method: 'POST',
         headers: { Authorization: `Bearer ${this.apiKey ?? ''}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          model: this.defaultModel,
+          model: this.activeModel(),
           messages: prompt.messages,
           temperature: prompt.temperature,
           max_tokens: prompt.maxTokens,
@@ -236,7 +253,7 @@ export class FireworksArchitect extends BaseArchitect {
     const data = await invokeJson(`${this.baseUrl}/chat/completions`, {
       headers: this.authHeaders(),
       body: {
-        model: this.defaultModel,
+        model: this.activeModel(),
         messages: prompt.messages,
         temperature: prompt.temperature,
         max_tokens: Math.min(prompt.maxTokens * 2, 16_000),
