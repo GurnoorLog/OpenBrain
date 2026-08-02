@@ -158,14 +158,14 @@ export default function LandingPage() {
               {
                 icon: 'lucide:layers',
                 color: 'from-purple-500/20 to-purple-900/20 border-purple-500/20 text-purple-400',
-                title: 'Deep MCP Integration',
-                body: 'Instant connectivity to your entire stack. Drag Slack, Notion, or GitHub nodes to give your Brain hands and feet.',
+                title: 'Node-Based Tools',
+                body: 'Compose browser, RAG, memory, and fine-tuning nodes into one brain. GitHub and MCP tool nodes are scaffolded — real connectors coming soon.',
               },
               {
                 icon: 'lucide:cpu',
                 color: 'from-blue-500/20 to-blue-900/20 border-blue-500/20 text-blue-400',
                 title: 'Model Agnostic Core',
-                body: 'Run Llama-3 locally via Ollama or switch to Claude-3.5 or GPT-4o with a single click. Zero lock-in, infinite power.',
+                body: 'Run local models via Ollama or cloud models on Fireworks (DeepSeek, GLM, and more) — pick your model right from the canvas.',
               },
             ].map((feature, index) => (
               <div key={feature.title} className="landing-reveal landing-glass-card p-10 flex flex-col gap-8" style={{ transitionDelay: `${(index + 1) * 0.1}s` }}>
@@ -297,7 +297,7 @@ export default function LandingPage() {
         <section className="py-40 px-6 flex flex-col items-center text-center">
           <div className="landing-reveal landing-glass-card w-full max-w-5xl p-16 md:p-24 bg-gradient-to-b from-teal-500/10 via-transparent to-transparent flex flex-col items-center">
             <h2 className="text-5xl md:text-6xl font-black mb-10 tracking-tighter max-w-2xl leading-none">Ready to give your idea a Brain?</h2>
-            <p className="text-gray-400 max-w-xl mb-14 text-xl font-medium">Join the 50,000+ architects building the next generation of autonomous systems.</p>
+            <p className="text-gray-400 max-w-xl mb-14 text-xl font-medium">Every brain you describe in plain language becomes a working system you can run and chat with.</p>
             <button onClick={enter} className="landing-shine-btn bg-white text-black px-16 py-6 rounded-2xl font-black text-2xl hover:scale-105 transition-transform inline-block shadow-2xl">
               LAUNCH THE STUDIO
             </button>
