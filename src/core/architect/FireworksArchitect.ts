@@ -190,7 +190,8 @@ export class FireworksArchitect extends BaseArchitect {
             const delta = parsed?.choices?.[0]?.delta ?? {}
             if (delta.reasoning_content) {
               for (const r of delta.reasoning_content.split(/(?<=\s)/)) pushReasoning(r)
-            } else if (delta.content) {
+            }
+            if (delta.content) {
               content += delta.content
             }
           } catch {
@@ -200,7 +201,10 @@ export class FireworksArchitect extends BaseArchitect {
       }
 
       if (content.trim() === '') {
-        throw new ArchitectProviderError(this.id, 'Fireworks streaming returned an empty completion.')
+        // Reasoning models can spend the entire token budget on chain-of-thought,
+        // leaving content empty. Retry once non-streaming with a doubled budget
+        // so a design that "thinks too long" still lands instead of failing.
+        return this.retryNonStreaming(prompt, signal)
       }
       // Reasoning was already delivered token-by-token to onReasoning during
       // streaming; returning it again would make BaseArchitect re-send the full
@@ -220,6 +224,31 @@ export class FireworksArchitect extends BaseArchitect {
 
   private authHeaders(): Readonly<Record<string, string>> {
     return { Authorization: `Bearer ${this.apiKey ?? ''}` }
+  }
+
+  // Fallback after a content-empty stream: one non-streaming completion with a
+  // doubled token budget. Reasoning is no longer delivered live (the model has
+  // already finished), so the caller only gets the final content.
+  private async retryNonStreaming(
+    prompt: StructuredPrompt,
+    signal?: AbortSignal,
+  ): Promise<ModelResult> {
+    const data = await invokeJson(`${this.baseUrl}/chat/completions`, {
+      headers: this.authHeaders(),
+      body: {
+        model: this.defaultModel,
+        messages: prompt.messages,
+        temperature: prompt.temperature,
+        max_tokens: Math.min(prompt.maxTokens * 2, 16_000),
+      },
+      timeoutMs: this.timeoutMs,
+      signal,
+    })
+    const result = readChatResult(data)
+    if (result.content === null) {
+      throw new ArchitectProviderError(this.id, 'Fireworks returned an empty completion.')
+    }
+    return { content: result.content, reasoning: result.reasoning ?? undefined }
   }
 }
 

@@ -173,7 +173,7 @@ export class PromptBuilder {
         { role: 'user', content: this.buildUserPrompt(request) },
       ],
       temperature: options.temperature ?? 0.4,
-      maxTokens: options.maxTokens ?? 4096,
+      maxTokens: options.maxTokens ?? 8192,
     }
   }
 
