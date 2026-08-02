@@ -214,7 +214,7 @@ export class MockNodeExecutor implements NodeExecutor {
     const summary =
       typeof value === 'string' ? value : value === undefined ? '—' : JSON.stringify(value)
     context.log(`Output delivered: ${summary.slice(0, 80)}`, { level: 'success', nodeId: context.currentNodeId })
-    return {}
+    return value === undefined ? {} : { result: value }
   }
 
   private async trigger(context: ExecutionContext): Promise<NodeOutputs> {

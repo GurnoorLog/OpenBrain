@@ -82,7 +82,7 @@ export default function ThinkingPill() {
             </div>
             <p
               className={`mt-1 text-xs text-teal-100/80 leading-snug break-words ${
-                collapsed ? 'line-clamp-3' : ''
+                collapsed ? 'line-clamp-3' : 'reasoning-scroll'
               }`}
             >
               {text}

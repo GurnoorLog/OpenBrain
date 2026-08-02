@@ -20,6 +20,35 @@ function summarizeOutput(output: Record<string, unknown>): string {
   return text.length > 56 ? `${text.slice(0, 56)}…` : text
 }
 
+function formatOutputValue(value: unknown): string {
+  if (typeof value === 'string') return value
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value)
+  return JSON.stringify(value, null, 2)
+}
+
+// Small popup shown when a node is selected: lists every output the node
+// produced so the user can see exactly what it fetched/computed.
+function NodeInspector({ output }: { output: Record<string, unknown> }) {
+  const entries = Object.entries(output)
+  if (entries.length === 0) return null
+  return (
+    <div className="node-inspector">
+      <div className="node-inspector-title">
+        <iconify-icon icon="lucide:info" className="text-teal-400 text-xs"></iconify-icon>
+        <span>Node output</span>
+      </div>
+      <div className="node-inspector-body">
+        {entries.map(([key, value]) => (
+          <div key={key} className="node-inspector-row">
+            <div className="node-inspector-key">{key}</div>
+            <pre className="node-inspector-value">{formatOutputValue(value)}</pre>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 function portTop(count: number, index: number): number {
   return NODE_HEADER / 2 + (index - (count - 1) / 2) * PORT_GAP
 }
@@ -62,6 +91,7 @@ function BrainNodeComponent({ id, data, selected }: NodeProps<BrainFlowNode>) {
         <div className="node-output">{summarizeOutput(node.output)}</div>
       )}
       {node.status === 'error' && node.error && <div className="node-error">{node.error}</div>}
+      {selected && node.output && <NodeInspector output={node.output} />}
       {data.capability === 'filesystem' && selected && (
         <textarea
           className="node-content-editor"
