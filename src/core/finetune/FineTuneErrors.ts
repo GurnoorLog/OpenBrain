@@ -14,7 +14,7 @@ export class FineTuneValidationError extends FineTuneError {
 }
 
 export class FineTuneUnconfiguredError extends FineTuneError {
-  constructor(message = 'Hugging Face is not configured (missing token).') {
+  constructor(message = 'The fine-tune provider is not configured (missing API token).') {
     super(message)
   }
 }

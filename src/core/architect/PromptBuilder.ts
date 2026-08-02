@@ -220,6 +220,8 @@ export class PromptBuilder {
       '- The "output" node MUST be present and MUST be the final sink - every pipeline must flow into it.',
       '- Node ids must be unique, lowercase words separated by dashes (e.g. "recipe-llm", "kitchen-data").',
       '- Edges describe data flow; the last edge must target the "output" node.',
+      '- Explicit capabilities the user NAMES in their request MUST be realized as the matching node type and wired into the graph. Memory ("remember", "persist context") => a "memory" node; "browse the web" / live pages => a "browser" node; image generation => an "imagegen" node; news => a "news" node. Do not mention the capability without adding its node.',
+      '- When a "memory" node is used, wire it so the llm can read it: memory node outputs feed the llm node (e.g. filesystem -> memory -> llm -> output).',
     ].join('\n')
   }
 

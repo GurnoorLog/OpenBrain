@@ -15,6 +15,7 @@ import NodePalette from '../components/NodePalette'
 import ModelHub from '../components/ModelHub'
 import { runShortcut } from '../components/keyboardShortcuts'
 import { useBrainStore } from '../store/useBrainStore'
+import { useAuth } from '../core/auth/useAuth'
 import { updateProject, buildProjectData } from '../core/projects/projectsRepository'
 import { loadSharedBrain } from '../core/brainIo'
 
@@ -26,6 +27,7 @@ export default function StudioApp() {
   const nodes = useBrainStore((state) => state.nodes)
   const connections = useBrainStore((state) => state.connections)
   const generating = useBrainStore((state) => state.generating)
+  const { user } = useAuth()
 
   // Runs once per opened project: if the project has a prompt but no brain
   // yet, kick off generation here in the studio where the thinking pill can
@@ -50,8 +52,12 @@ export default function StudioApp() {
   // settles). Debounced so dragging nodes or typing in the inspector doesn't
   // hammer Supabase with a write per keystroke. Previously the save ran at
   // most once per mount, silently dropping every edit made afterwards.
+  // Shared projects (opened via #brain= link) belong to another user, so
+  // autosave must never overwrite the owner's row — manual save is the only
+  // path for non-owners (Toolbar/Header already warn about it).
   useEffect(() => {
     if (!projectId || !projectOwnerId || generating || nodes.length === 0) return
+    if (!user || projectOwnerId !== user.id) return
     const timer = window.setTimeout(() => {
       void updateProject(projectOwnerId, projectId, {
         data: buildProjectData(
@@ -67,10 +73,15 @@ export default function StudioApp() {
           })),
           connections,
         ),
+      }).catch((error) => {
+        useBrainStore.getState().addLog(
+          error instanceof Error ? error.message : 'Autosave failed',
+          'error',
+        )
       })
     }, 1200)
     return () => window.clearTimeout(timer)
-  }, [projectId, projectPrompt, projectOwnerId, nodes, connections, generating])
+  }, [projectId, projectPrompt, projectOwnerId, nodes, connections, generating, user])
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {

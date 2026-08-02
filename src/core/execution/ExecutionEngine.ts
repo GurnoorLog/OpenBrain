@@ -222,6 +222,12 @@ export class ExecutionEngine {
     if (!run) return
     run.paused = false
     run.abortController.abort()
+    // If the run is suspended inside waitIfPaused, abort alone won't wake it —
+    // the pending resolver would hang forever and activeRun would never clear.
+    // Resolve every waiter so the loop re-checks the signal and exits cancelled.
+    const resolvers = run.resumeResolvers
+    run.resumeResolvers = []
+    for (const resolve of resolvers) resolve()
   }
 
   pause(): void {

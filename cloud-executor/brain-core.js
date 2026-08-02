@@ -141,7 +141,10 @@ async function executeBrain({ nodes, connections, memory }) {
     const node = byId.get(nodeId)
     if (!node) continue
     const inputs = collectInputs(nodeId, edges, outputs)
-    const config = node.configuration ?? {}
+    // Client nodes carry content/reason/model at the top level; the domain
+    // brain puts them under `configuration`. Read both so cloud runs use the
+    // architect's real node content instead of the canned scaffold fallbacks.
+    const config = { ...(node.configuration ?? {}), ...(node.content !== undefined ? { content: node.content } : {}), ...(node.model !== undefined ? { model: node.model } : {}) }
 
     let result
     switch (node.type) {
