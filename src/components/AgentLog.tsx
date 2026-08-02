@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useBrainStore } from '../store/useBrainStore'
 import { PROVIDER_CATALOG } from '../core/architect'
+import { getSelectedFireworksModel } from './canvas/architectAdapter'
 import type { LogEntry } from '../core/types'
 
 function shortModel(model: string): string {
@@ -21,8 +22,10 @@ export default function AgentLog() {
   }, [expanded, logs])
 
   const activeProvider = PROVIDER_CATALOG.find((entry) => entry.id === activeProviderId)
+  const selectedModel = activeProviderId === 'fireworks' ? getSelectedFireworksModel() : null
+  const shownModel = shortModel(selectedModel ?? activeProvider?.defaultModel ?? '')
   const statusLabel = activeProvider
-    ? `${activeProvider.name} · ${shortModel(activeProvider.defaultModel)}`
+    ? `${activeProvider.name} · ${shownModel}`
     : 'No provider'
 
   const renderEntry = (entry: LogEntry) => (
