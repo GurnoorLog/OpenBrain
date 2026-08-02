@@ -8,6 +8,7 @@ import BottomControls from '../components/BottomControls'
 import FineTuneConfirmModal from '../components/FineTuneConfirmModal'
 import BrainTitle from '../components/BrainTitle'
 import ThinkingPill from '../components/ThinkingPill'
+import QuestionCard from '../components/QuestionCard'
 import KeyRequestCard from '../components/KeyRequestCard'
 import { runShortcut } from '../components/keyboardShortcuts'
 import { useBrainStore } from '../store/useBrainStore'
@@ -67,6 +68,7 @@ export default function StudioApp() {
       <BrainCanvas zoomDisplayRef={zoomRef} />
       <BrainTitle />
       <ThinkingPill />
+      <QuestionCard />
       <KeyRequestCard />
       <FineTuneConfirmModal />
 

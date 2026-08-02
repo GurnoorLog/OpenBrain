@@ -67,6 +67,12 @@ export interface KeyRequest {
   envHint: string
 }
 
+export interface ClarifyState {
+  prompt: string
+  questions: string[]
+  viewport: { width: number; height: number }
+}
+
 function snapshot(nodes: BrainNode[], connections: Connection[]): Snapshot {
   return {
     nodes: nodes.map((node) => ({ ...node, status: 'idle', output: undefined, error: undefined })),
@@ -111,9 +117,11 @@ export interface BrainStore {
   projectOwnerId: string | null
   brainTitle: string
   thinking: string
+  lastReasoning: string
   generationError: string | null
   pendingQuestion: string | null
   pendingKeyRequest: KeyRequest | null
+  clarify: ClarifyState | null
   past: Snapshot[]
   future: Snapshot[]
 
@@ -125,9 +133,11 @@ export interface BrainStore {
   }) => void
   setBrainTitle: (title: string) => void
   setThinking: (text: string) => void
+  setLastReasoning: (text: string) => void
   setGenerationError: (error: string | null) => void
   setPendingQuestion: (question: string | null) => void
   setPendingKeyRequest: (request: KeyRequest | null) => void
+  setClarify: (state: ClarifyState | null) => void
   setView: (view: Partial<ViewState>) => void
   setMode: (mode: EditorMode) => void
   setSelection: (ids: string[]) => void
@@ -141,6 +151,7 @@ export interface BrainStore {
 
   setBrain: (spec: BrainSpec) => void
   generateFromPrompt: (prompt: string, viewport: { width: number; height: number }) => void
+  submitClarify: (answers: string[]) => void
   stopGeneration: () => void
   addNode: (type: CapabilityType, x: number, y: number) => void
   removeElements: (nodeIds: string[], connectionIds: string[]) => void
@@ -178,9 +189,11 @@ export const useBrainStore = create<BrainStore>((set, get) => ({
   projectOwnerId: null,
   brainTitle: '',
   thinking: '',
+  lastReasoning: '',
   generationError: null,
   pendingQuestion: null,
   pendingKeyRequest: null,
+  clarify: null,
   past: [],
   future: [],
 
@@ -193,9 +206,11 @@ export const useBrainStore = create<BrainStore>((set, get) => ({
     }),
   setBrainTitle: (brainTitle) => set({ brainTitle }),
   setThinking: (thinking) => set({ thinking }),
+  setLastReasoning: (lastReasoning) => set({ lastReasoning }),
   setGenerationError: (generationError) => set({ generationError }),
   setPendingQuestion: (pendingQuestion) => set({ pendingQuestion }),
   setPendingKeyRequest: (pendingKeyRequest) => set({ pendingKeyRequest }),
+  setClarify: (clarify) => set({ clarify }),
   setView: (view) => set((state) => ({ view: { ...state.view, ...view } })),
 
   setMode: (mode) => set({ mode }),
@@ -252,6 +267,18 @@ export const useBrainStore = create<BrainStore>((set, get) => ({
     set({ generating: true })
     void generateFromArchitect(prompt, viewport, controller.signal).finally(() => {
       if (generationController === controller) generationController = null
+      set({ generating: false })
+    })
+  },
+
+  submitClarify: (answers) => {
+    const state = get()
+    const clarify = state.clarify
+    if (!clarify || state.generating) return
+    set({ clarify: null, generating: true })
+    generationController?.abort()
+    void generateFromArchitect(clarify.prompt, clarify.viewport, undefined, answers).finally(() => {
+      generationController = null
       set({ generating: false })
     })
   },

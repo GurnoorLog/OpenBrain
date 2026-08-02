@@ -99,13 +99,14 @@ export function toLegacyBrainSpec(brain: Brain): BrainSpec {
 // validate -> materialize). Fine-tune intents are routed to the fine-tune
 // planner instead, which designs a dry-run job and surfaces it on the canvas.
 // Pass an AbortSignal to allow the user to cancel an in-flight generation.
-// When no provider is implemented yet, it falls back to the offline keyword
-// draft generator and logs honestly which path ran. A user-cancelled request
-// never falls back — it just stops.
+// When `answers` are provided (from the clarify step) they are appended as
+// context and the clarify pass is skipped. A user-cancelled request never
+// falls back — it just stops.
 export async function generateFromPrompt(
   prompt: string,
   viewport: { width: number; height: number },
   signal?: AbortSignal,
+  answers?: readonly string[],
 ): Promise<void> {
   const store = useBrainStore.getState()
 
@@ -123,6 +124,20 @@ export async function generateFromPrompt(
     return
   }
 
+  if (!answers) {
+    const questions = await askClarifying(prompt, signal)
+    if (questions.length > 0) {
+      store.setClarify({ prompt, questions, viewport })
+      store.addLog('Architect has a few questions before designing', 'info')
+      return
+    }
+  }
+
+  const enrichedPrompt =
+    answers && answers.length > 0
+      ? buildAnswerContext(prompt, answers)
+      : prompt
+
   store.addLog('Architect analyzing request…', 'info')
   store.setGenerationError(null)
   store.setThinking('Analyzing request…')
@@ -132,7 +147,7 @@ export async function generateFromPrompt(
     const providerId = getActiveProviderId()
     const specification = await architect.design(
       {
-        prompt,
+        prompt: enrichedPrompt,
         signal,
         onReasoning: (reasoning) => {
           reasoningBuffer += reasoning
@@ -146,7 +161,11 @@ export async function generateFromPrompt(
     store.setBrain(spec)
     store.setBrainTitle(deriveTitle(prompt))
     if (reasoningBuffer.trim()) {
-      store.addLog(`Reasoning: ${clipReasoning(reasoningBuffer.trim())}`, 'info')
+      const clipped = clipReasoning(reasoningBuffer.trim())
+      store.setLastReasoning(clipped)
+      store.addLog(`Reasoning: ${clipped}`, 'info')
+    } else {
+      store.setLastReasoning('')
     }
     store.setThinking('')
     store.addLog(`Architect designed a ${spec.nodes.length}-node brain`, 'success')
@@ -165,6 +184,27 @@ export async function generateFromPrompt(
     store.setThinking('')
     store.addLog(reason, 'error')
   }
+}
+
+// First pass: ask the active provider for clarifying questions. Any failure
+// yields [] so the design flow proceeds without friction.
+async function askClarifying(
+  prompt: string,
+  signal?: AbortSignal,
+): Promise<string[]> {
+  const providerId = getActiveProviderId()
+  const provider = providers[providerId]
+  if (!provider) return []
+  try {
+    return await provider.askClarifyingQuestions({ prompt, signal })
+  } catch {
+    return []
+  }
+}
+
+function buildAnswerContext(prompt: string, answers: readonly string[]): string {
+  const lines = answers.map((answer, index) => `Q${index + 1}: ${answer.trim()}`)
+  return `${prompt}\n\nUser clarifications:\n${lines.join('\n')}`
 }
 
 // Short, human, title cap. Lazy 5-word heading, then fall back to a generic.

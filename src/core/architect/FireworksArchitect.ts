@@ -59,6 +59,48 @@ export class FireworksArchitect extends BaseArchitect {
     }
   }
 
+  // Cheap first pass (no streaming): asks the model what it needs to know to
+  // design a great brain for this request. Returns up to 4 questions, or []
+  // when the request is already clear. Robust to failures — a clarify step
+  // that errors out simply yields no questions.
+  override async askClarifyingQuestions(request: {
+    prompt: string
+    signal?: AbortSignal
+  }): Promise<string[]> {
+    if (!this.apiKey) return []
+    try {
+      const data = await invokeJson(`${this.baseUrl}/chat/completions`, {
+        headers: this.authHeaders(),
+        body: {
+          model: this.defaultModel,
+          messages: [
+            {
+              role: 'system',
+              content: [
+                'You are the OpenBrain architect doing a brief intake interview.',
+                'Decide whether the user\'s request is specific enough to design an agent graph for immediately.',
+                'If it is clear enough, respond with the JSON array [] (empty).',
+                'If you need more context, ask at most 3 concise clarifying questions that would materially improve the design.',
+                'Respond with ONLY a JSON array of question strings. No prose, no markdown.',
+              ].join(' '),
+            },
+            { role: 'user', content: request.prompt },
+          ],
+          temperature: 0.2,
+          max_tokens: 300,
+        },
+        timeoutMs: 20_000,
+        signal: request.signal,
+      })
+      const result = readChatResult(data)
+      if (result.content === null) return []
+      const questions = parseQuestionList(result.content)
+      return questions.length > 0 ? questions.slice(0, 3) : []
+    } catch {
+      return []
+    }
+  }
+
   protected override async invokeModel(
     prompt: StructuredPrompt,
     signal?: AbortSignal,
@@ -202,5 +244,23 @@ function readChatResult(data: unknown): { content: string | null; reasoning: str
   return {
     content: typeof content === 'string' && content.trim() !== '' ? content : null,
     reasoning: typeof reasoning === 'string' && reasoning.trim() !== '' ? reasoning : null,
+  }
+}
+
+// Parses a JSON array of question strings, tolerating code fences and stray
+// punctuation around the array. Returns [] for anything non-array-like.
+function parseQuestionList(raw: string): string[] {
+  const trimmed = raw.trim()
+  const fenced = trimmed.match(/```(?:json)?\s*(\[[\s\S]*?\])\s*```/i)
+  const candidate = fenced ? fenced[1] : trimmed
+  const start = candidate.indexOf('[')
+  const end = candidate.lastIndexOf(']')
+  if (start === -1 || end === -1 || end <= start) return []
+  try {
+    const parsed: unknown = JSON.parse(candidate.slice(start, end + 1))
+    if (!Array.isArray(parsed)) return []
+    return parsed.filter((item): item is string => typeof item === 'string' && item.trim() !== '')
+  } catch {
+    return []
   }
 }

@@ -32,6 +32,10 @@ export interface ArchitectProvider {
   designBrain(request: DesignRequest): Promise<BrainSpecification>
   health(): Promise<ProviderHealth>
   supportsStreaming(): boolean
+  // Cheap first pass: returns up to a few clarifying questions (empty array
+  // when the request is clear enough to design immediately). Answers feed the
+  // real design call. Implementations that can't ask questions return [].
+  askClarifyingQuestions(request: { prompt: string; signal?: AbortSignal }): Promise<string[]>
 }
 
 export interface JsonRequestOptions {
@@ -97,6 +101,10 @@ export abstract class BaseArchitect implements ArchitectProvider {
 
   supportsStreaming(): boolean {
     return true
+  }
+
+  async askClarifyingQuestions(_request: { prompt: string; signal?: AbortSignal }): Promise<string[]> {
+    return []
   }
 
   async health(): Promise<ProviderHealth> {
