@@ -1,0 +1,148 @@
+import { useEffect, useState } from 'react'
+import type { ProviderStatus } from '../core/domain'
+import { PROVIDER_CATALOG } from '../core/architect'
+import { getActiveProviderId, isFireworksApiKeyConfigured, listProviderHealth } from './canvas/architectAdapter'
+import { isHfTokenConfigured } from './canvas/finetuneAdapter'
+import { TOOLS } from '../core/tools/toolRegistry'
+import type { ProviderOverview } from './canvas/architectAdapter'
+
+const STATUS_LABEL: Readonly<Record<ProviderStatus, string>> = {
+  available: 'Available',
+  unconfigured: 'Not configured',
+  unavailable: 'Unavailable',
+  degraded: 'Degraded',
+}
+
+const STATUS_DOT: Readonly<Record<ProviderStatus, string>> = {
+  available: 'bg-emerald-500',
+  unconfigured: 'bg-gray-500',
+  unavailable: 'bg-red-500',
+  degraded: 'bg-amber-500',
+}
+
+function shortModel(model: string): string {
+  const parts = model.split('/')
+  return parts[parts.length - 1] ?? model
+}
+
+interface SettingsPanelProps {
+  readonly open: boolean
+  readonly onClose: () => void
+}
+
+export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
+  const [overviews, setOverviews] = useState<readonly ProviderOverview[]>([])
+  const [fireworksKeySet, setFireworksKeySet] = useState(false)
+  const [hfTokenSet, setHfTokenSet] = useState(false)
+
+  useEffect(() => {
+    if (!open) return
+    let cancelled = false
+    setFireworksKeySet(isFireworksApiKeyConfigured())
+    setHfTokenSet(isHfTokenConfigured())
+    void listProviderHealth().then((result) => {
+      if (!cancelled) setOverviews(result)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [open])
+
+  if (!open) return null
+
+  const active = PROVIDER_CATALOG.find((entry) => entry.id === getActiveProviderId()) ?? PROVIDER_CATALOG[0]
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center">
+      <div className="absolute inset-0 bg-black/40" onClick={onClose}></div>
+      <div className="relative glass-panel w-[26rem] max-w-[90vw] p-5">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-white font-bold tracking-tight text-lg">Settings</h2>
+          <button
+            className="toolbar-btn w-8 h-8 text-gray-400 hover:text-white"
+            onClick={onClose}
+            aria-label="Close settings"
+          >
+            <iconify-icon icon="lucide:x"></iconify-icon>
+          </button>
+        </div>
+
+        <div className="mb-4">
+          <div className="text-[10px] uppercase tracking-widest text-gray-500 font-bold mb-1.5">
+            Active provider
+          </div>
+          <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-white/5 border border-white/10">
+            <div>
+              <div className="text-sm text-gray-200 font-medium">{active.name}</div>
+              <div className="text-[11px] text-gray-500">{shortModel(active.defaultModel)}</div>
+            </div>
+            <div className="text-[11px] text-teal-400 font-semibold">Active</div>
+          </div>
+        </div>
+
+        <div className="mb-4">
+          <div className="text-[10px] uppercase tracking-widest text-gray-500 font-bold mb-1.5">
+            Provider health
+          </div>
+          <div className="flex flex-col gap-1.5">
+            {PROVIDER_CATALOG.map((entry) => {
+              const overview = overviews.find((item) => item.id === entry.id)
+              const status = overview?.health.status
+              return (
+                <div key={entry.id} className="flex items-center justify-between px-3 py-2 rounded-lg bg-white/5 border border-white/10">
+                  <div>
+                    <div className="text-sm text-gray-200 font-medium">{entry.name}</div>
+                    <div className="text-[11px] text-gray-500">{shortModel(entry.defaultModel)}</div>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    {status ? (
+                      <>
+                        <span className={`w-1.5 h-1.5 rounded-full ${STATUS_DOT[status]}`}></span>
+                        <span className={`text-[11px] ${status === 'available' ? 'text-emerald-400' : status === 'unavailable' ? 'text-red-400' : 'text-gray-400'}`}>
+                          {STATUS_LABEL[status]}
+                        </span>
+                      </>
+                    ) : (
+                      <span className="text-[11px] text-gray-500">Checking…</span>
+                    )}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+
+        <div>
+          <div className="text-[10px] uppercase tracking-widest text-gray-500 font-bold mb-1.5">
+            Configuration
+          </div>
+          <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-white/5 border border-white/10">
+            <span className="text-sm text-gray-300">Fireworks API key</span>
+            <span className={`text-[11px] font-semibold ${fireworksKeySet ? 'text-emerald-400' : 'text-gray-400'}`}>
+              {fireworksKeySet ? 'Set' : 'Not set'}
+            </span>
+          </div>
+          <div className="mt-1.5 flex items-center justify-between px-3 py-2 rounded-lg bg-white/5 border border-white/10">
+            <span className="text-sm text-gray-300">Hugging Face token</span>
+            <span className={`text-[11px] font-semibold ${hfTokenSet ? 'text-emerald-400' : 'text-gray-400'}`}>
+              {hfTokenSet ? 'Set' : 'Not set'}
+            </span>
+          </div>
+          <div className="mt-3 flex flex-col gap-1.5">
+            {TOOLS.filter((tool) => tool.needsKey).map((tool) => {
+              const set = Boolean(localStorage.getItem(tool.keyStorageKey))
+              return (
+                <div key={tool.id} className="flex items-center justify-between px-3 py-2 rounded-lg bg-white/5 border border-white/10">
+                  <span className="text-sm text-gray-300">{tool.name} API key</span>
+                  <span className={`text-[11px] font-semibold ${set ? 'text-emerald-400' : 'text-gray-400'}`}>
+                    {set ? 'Set' : 'Not set'}
+                  </span>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
