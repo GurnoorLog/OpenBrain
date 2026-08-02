@@ -134,7 +134,16 @@ export class MockNodeExecutor implements NodeExecutor {
     if (provider && provider.config.status === 'available') {
       context.log('LLM querying the configured AI provider.', { nodeId: context.currentNodeId })
       const completion = await provider.complete({
-        messages: [{ role: 'user', content: `${prompt}${memoryNote}` }],
+        // Default system prompt: match the user's language so a Chinese-origin
+        // model (deepseek) doesn't answer casual English input in Chinese.
+        messages: [
+          {
+            role: 'system',
+            content:
+              'You are OpenBrain, an AI agent. Reply in the same language the user wrote in; be concise and useful.',
+          },
+          { role: 'user', content: `${prompt}${memoryNote}` },
+        ],
         model: provider.config.model,
         temperature: provider.config.temperature,
         maxTokens: provider.config.maxTokens,
