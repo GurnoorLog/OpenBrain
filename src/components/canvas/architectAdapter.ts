@@ -129,12 +129,23 @@ export interface ProviderOverview {
 }
 
 // Live health for every catalogued provider, in catalog order. Each status
-// comes from a real .health() call — nothing is faked as available.
+// comes from a real .health() call — nothing is faked as available. Failures
+// (e.g. a local Ollama unreachable from a deployed origin) are reported as
+// unavailable instead of rejecting the whole list.
 export async function listProviderHealth(): Promise<readonly ProviderOverview[]> {
   const overviews: ProviderOverview[] = []
   for (const entry of PROVIDER_CATALOG) {
     const provider = providers[entry.id]
-    const health = provider ? await provider.health() : { status: 'unavailable' as const, checkedAt: new Date().toISOString() }
+    let health: ProviderHealth
+    if (!provider) {
+      health = { status: 'unavailable', checkedAt: new Date().toISOString() }
+    } else {
+      try {
+        health = await provider.health()
+      } catch {
+        health = { status: 'unavailable', checkedAt: new Date().toISOString() }
+      }
+    }
     overviews.push({ id: entry.id, name: entry.name, model: entry.defaultModel, health })
   }
   return overviews

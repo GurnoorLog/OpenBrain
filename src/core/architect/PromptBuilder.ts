@@ -79,7 +79,8 @@ export const NODE_CATALOG: readonly NodeCatalogEntry[] = [
   },
   {
     type: 'news',
-    description: 'Fetch live news articles for a topic',
+    description:
+      'Fetch live news articles for a topic (requires a paid NewsAPI key — only use when the user explicitly asks for current news headlines; for general web research use the browser node instead)',
     inputs: [{ id: 'query', label: 'Query', kind: 'text' }],
     outputs: [
       { id: 'articles', label: 'Articles', kind: 'list' },
@@ -222,7 +223,9 @@ export class PromptBuilder {
       '- The "output" node MUST be present and MUST be the final sink - every pipeline must flow into it.',
       '- Node ids must be unique, lowercase words separated by dashes (e.g. "recipe-llm", "kitchen-data").',
       '- Edges describe data flow; the last edge must target the "output" node.',
-      '- Explicit capabilities the user NAMES in their request MUST be realized as the matching node type and wired into the graph. Memory ("remember", "persist context") => a "memory" node; "browse the web" / live pages => a "browser" node; image generation => an "imagegen" node; news => a "news" node. Do not mention the capability without adding its node.',
+      '- Explicit capabilities the user NAMES in their request MUST be realized as the matching node type and wired into the graph. Memory ("remember", "persist context") => a "memory" node; "browse the web" / live pages => a "browser" node; image generation => an "imagegen" node; current news headlines => a "news" node. Do not mention the capability without adding its node.',
+      '- For any request to "browse the web", "research on the web", or "gather information from websites", use the "browser" node and set its concrete target URL in "configuration" ({ "url": "https://..." }). Prefer "browser" over "news" unless the user explicitly asks for live news headlines.',
+      '- The "news" node requires a paid external API key — avoid it for general research; a research assistant that "browses the web" MUST use "browser", not "news".',
       '- Every data source node you add (browser, filesystem, news, imagegen) MUST connect its output into the "llm" node so the model actually reads that data; a source node whose output reaches nobody is a FAILURE.',
       '- Cross-run memory pattern (use BOTH): a "memory" READ node with NO incoming edges whose "stored" output feeds the llm node on its "history" input (memory-read -> llm "history") so later runs show "(From memory — prior runs: ...)", AND a "memory" WRITE node that receives the llm node\'s "response" on its "value" input (llm -> memory-write). A single memory node that only writes (llm -> memory) without reading back is a FAILURE. Do not make the llm depend on the write node or you create a cycle.',
     ].join('\n')
