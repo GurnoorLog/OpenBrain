@@ -79,8 +79,8 @@ function firstValue(inputs) {
 // Runs a Composio tool with the server-side key. Returns an { ok, ... } object
 // that becomes the node's outputs; failures resolve gracefully (the node is
 // marked failed by the caller) instead of killing the whole run.
-async function runComposioTool(slug, args, pushLog, nodeId) {
-  const apiKey = process.env.COMPOSIO_API_KEY || ''
+async function runComposioTool(slug, args, pushLog, nodeId, requestKey) {
+  const apiKey = requestKey || process.env.COMPOSIO_API_KEY || ''
   if (apiKey === '') {
     pushLog(`${slug} skipped — set COMPOSIO_API_KEY on this service.`, 'warning', nodeId)
     return { ok: false, result: 'No COMPOSIO_API_KEY set on the cloud executor.' }
@@ -204,7 +204,7 @@ const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 // (BrainNodeSpec / Connection: id, type, x, y, content, reason, model, from,
 // fromPort, to, toPort). Returns resolved node outputs keyed by node id plus
 // a run log.
-async function executeBrain({ nodes, connections, memory }) {
+async function executeBrain({ nodes, connections, memory, composioApiKey }) {
   if (!Array.isArray(nodes) || nodes.length === 0) {
     throw new Error('Brain is empty — nothing to run in the cloud.')
   }
@@ -308,7 +308,7 @@ async function executeBrain({ nodes, connections, memory }) {
           typeof config.tool === 'string' && config.tool.trim() !== ''
             ? config.tool.trim()
             : 'GITHUB_LIST_REPOSITORIES_FOR_THE_AUTHENTICATED_USER'
-        result = await runComposioTool(slug, mergeToolArgs(config.arguments, inputs), pushLog, nodeId)
+        result = await runComposioTool(slug, mergeToolArgs(config.arguments, inputs), pushLog, nodeId, composioApiKey)
         break
       }
 
@@ -318,7 +318,7 @@ async function executeBrain({ nodes, connections, memory }) {
           typeof config.tool === 'string' && config.tool.trim() !== ''
             ? config.tool.trim()
             : 'HACKERNEWS_GET_TOP_STORIES'
-        result = await runComposioTool(slug, mergeToolArgs(config.arguments, inputs), pushLog, nodeId)
+        result = await runComposioTool(slug, mergeToolArgs(config.arguments, inputs), pushLog, nodeId, composioApiKey)
         break
       }
 

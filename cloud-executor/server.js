@@ -67,11 +67,16 @@ async function handleRun(req, res) {
     return
   }
   const memory = typeof payload.memory === 'string' ? payload.memory : ''
+  const composioApiKey =
+    typeof payload.composioApiKey === 'string' && payload.composioApiKey.trim() !== ''
+      ? payload.composioApiKey.trim()
+      : ''
   try {
     const result = await executeBrain({
       nodes: brain.nodes,
       connections: Array.isArray(brain.connections) ? brain.connections : [],
       memory,
+      composioApiKey,
     })
     send(res, 200, { ok: true, ...result })
   } catch (error) {

@@ -1,5 +1,6 @@
 import { useBrainStore } from '../../store/useBrainStore'
 import type { BrainNodeSpec, Connection } from '../types'
+import { getComposioApiKey } from '../tools/toolRegistry'
 
 const CLOUD_TIMEOUT_MS = 150000
 
@@ -68,7 +69,13 @@ export async function runBrainInCloud(): Promise<void> {
     const response = await fetch(`${baseUrl.replace(/\/$/, '')}/run`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ brain }),
+      body: JSON.stringify({
+        brain,
+        // The Composio key is already bundled in this build (VITE_ env var),
+        // so sending it along lets the cloud executor run GitHub/MCP nodes
+        // without needing a COMPOSIO_API_KEY set in Render's dashboard.
+        composioApiKey: getComposioApiKey() ?? undefined,
+      }),
       signal: controller.signal,
     })
 
