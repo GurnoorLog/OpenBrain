@@ -1,7 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
 import type { ProviderStatus } from '../core/domain'
 import { PROVIDER_CATALOG } from '../core/architect'
-import { getSelectedFireworksModel, listProviderHealth } from './canvas/architectAdapter'
+import { FIREWORKS_MODELS } from '../core/providers/fireworksModels'
+import {
+  getSelectedFireworksModel,
+  listProviderHealth,
+  setSelectedFireworksModel,
+} from './canvas/architectAdapter'
 import type { ProviderOverview } from './canvas/architectAdapter'
 import { useBrainStore } from '../store/useBrainStore'
 import type { ProviderId } from '../core/domain'
@@ -38,6 +43,7 @@ export default function ProviderPill() {
   const setActiveProvider = useBrainStore((state) => state.setActiveProvider)
   const [open, setOpen] = useState(false)
   const [health, setHealth] = useState<Readonly<Record<string, ProviderOverview>>>({})
+  const [selectedModel, setSelectedModel] = useState<string>(() => getSelectedFireworksModel() ?? '')
   const ref = useRef<HTMLDivElement>(null)
 
   // The model actually in effect: the user's Settings pick for Fireworks,
@@ -58,6 +64,7 @@ export default function ProviderPill() {
     const next = !open
     setOpen(next)
     if (next) {
+      setSelectedModel(getSelectedFireworksModel() ?? '')
       void listProviderHealth().then((overviews) => {
         const map: Record<string, ProviderOverview> = {}
         for (const overview of overviews) map[overview.id] = overview
@@ -75,7 +82,7 @@ export default function ProviderPill() {
           toggle()
         }}
         aria-expanded={open}
-        aria-label="Select provider"
+        aria-label="Select provider and model"
         title={activeModel}
       >
         <span>{shortModel(activeModel)}</span>
@@ -128,6 +135,43 @@ export default function ProviderPill() {
             )
           })}
         </div>
+        {activeProviderId === 'fireworks' && (
+          <>
+            <div className="px-3 pt-3 pb-1 text-[10px] uppercase tracking-widest text-gray-500 font-bold">
+              Model
+            </div>
+            <div className="flex flex-col gap-0.5">
+              {FIREWORKS_MODELS.map((model) => {
+                const isSelected = model.id === selectedModel
+                return (
+                  <button
+                    key={model.id}
+                    className="flex items-center gap-2 px-3 py-2 rounded-lg text-left hover:bg-white/5 transition-colors"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setSelectedModel(model.id)
+                      setSelectedFireworksModel(model.id)
+                      setOpen(false)
+                    }}
+                    aria-pressed={isSelected}
+                  >
+                    <div className="flex-1 min-w-0">
+                      <span className="text-sm text-gray-200 font-medium truncate">
+                        {model.name}
+                      </span>
+                      <span className="block text-[11px] text-gray-500 truncate">
+                        {model.description}
+                      </span>
+                    </div>
+                    {isSelected && (
+                      <iconify-icon icon="lucide:check" className="text-teal-400 text-xs"></iconify-icon>
+                    )}
+                  </button>
+                )
+              })}
+            </div>
+          </>
+        )}
       </div>
     </div>
   )
