@@ -218,7 +218,14 @@ export default function Header() {
       </div>
 
       <SettingsPanel open={settingsOpen} onClose={() => setSettingsOpen(false)} />
-      <BrainChat open={chatOpen} onClose={closeChat} />
+      <BrainChat
+        open={chatOpen}
+        onOpen={() => {
+          setChatOpen(true)
+          window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}#preview`)
+        }}
+        onClose={closeChat}
+      />
     </header>
   )
 }

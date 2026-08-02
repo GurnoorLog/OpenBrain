@@ -14,6 +14,7 @@ import type { CapabilityType } from '../../core/types'
 import { TOOLS, toolForNodeType } from '../../core/tools/toolRegistry'
 import { createFireworksAIProvider } from '../../core/providers/FireworksAIProvider'
 import { getBrainMemoryStore } from '../../core/memory/brainMemory'
+import { setReportDownloadEnabled } from '../../core/execution/MockNodeExecutor'
 import { useBrainStore } from '../../store/useBrainStore'
 import { toDomainBrain } from './brainAdapter'
 
@@ -38,13 +39,28 @@ function nodeLabel(nodeType: NodeType): string {
   return CAPABILITIES[nodeType as CapabilityType]?.label ?? nodeType
 }
 
+export interface RunBrainOptions {
+  // Chat-driven runs stamp this onto the llm node so the model answers the
+  // user's question on top of the browser/memory context from the graph.
+  readonly userMessage?: string
+  // Chat answers are returned to the pill instead of downloading a report.
+  readonly downloadReport?: boolean
+}
+
 // Runs the current store graph through the ExecutionEngine. Builds a domain
 // Brain from the legacy store shape (same bridge as the renderer), executes
 // it, and translates ExecutionEvents back into the existing store actions so
-// Agent Log and node status dots update exactly as before.
-export async function runBrain(): Promise<void> {
+// Agent Log and node status dots update exactly as before. Resolves with the
+// output node's result when the run produced one (the chat pill's answer).
+export async function runBrain(options: RunBrainOptions = {}): Promise<string | null> {
   const store = useBrainStore.getState()
-  if (store.running || store.nodes.length === 0) return
+  if (store.running || store.nodes.length === 0) return null
+
+  const llmNode = store.nodes.find((node) => node.type === 'llm')
+  if (options.userMessage !== undefined && llmNode) {
+    store.setNodeConfiguration(llmNode.id, { userMessage: options.userMessage })
+  }
+  setReportDownloadEnabled(options.downloadReport !== false)
 
   const toolNode = store.nodes.find((node) => {
     const tool = toolForNodeType(node.type)
@@ -62,7 +78,7 @@ export async function runBrain(): Promise<void> {
       })
       store.addLog(`${tool.name} needs an API key to run`, 'warning')
     }
-    return
+    return null
   }
 
   store.setRunning(true)
@@ -123,4 +139,7 @@ export async function runBrain(): Promise<void> {
     activeEngine = null
     for (const dispose of disposers) dispose()
   }
+  const outputNode = useBrainStore.getState().nodes.find((node) => node.type === 'output')
+  const value = outputNode?.output?.['result']
+  return typeof value === 'string' ? value : value === undefined ? null : JSON.stringify(value)
 }

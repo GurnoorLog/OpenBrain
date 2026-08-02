@@ -17,6 +17,13 @@ export interface MockExecutorsOptions {
   readonly memoryStore?: BrainMemoryStore
 }
 
+// Chat-driven runs reuse the whole graph but skip the automatic report
+// download — the answer is returned to the chat pill instead.
+let reportDownloadEnabled = true
+export function setReportDownloadEnabled(enabled: boolean): void {
+  reportDownloadEnabled = enabled
+}
+
 const rand = (max: number): number => Math.floor(Math.random() * max)
 
 // Compact one-line preview used for logs/output summaries (truncates long text).
@@ -135,7 +142,16 @@ export class MockNodeExecutor implements NodeExecutor {
   private async llm(inputs: NodeInputs, context: ExecutionContext): Promise<NodeOutputs> {
     const provider = this.options?.provider
     const memoryHistory = typeof inputs['history'] === 'string' ? inputs['history'] : ''
+    const node = context.brain.nodes.find((entry) => entry.id === context.currentNodeId)
+    // Chat-driven runs stamp the user's message onto the llm node so the model
+    // answers THE question, on top of the browser/memory context from edges.
+    const userMessage =
+      typeof node?.configuration['userMessage'] === 'string' &&
+      node.configuration['userMessage'].trim() !== ''
+        ? node.configuration['userMessage'].trim()
+        : ''
     const prompt = llmContext(inputs) || 'Respond briefly.'
+    const userNote = userMessage !== '' ? `\n\nUser request: ${userMessage}` : ''
     const memoryNote =
       memoryHistory.trim() !== ''
         ? `\n\n(From memory — prior runs of this brain:\n${memoryHistory.trim()})`
@@ -143,7 +159,6 @@ export class MockNodeExecutor implements NodeExecutor {
     // The architect stamps each llm node with a role/system prompt in
     // configuration.instructions (e.g. "You are a research assistant…"), so the
     // model knows what it is instead of answering as a generic chatbot.
-    const node = context.brain.nodes.find((entry) => entry.id === context.currentNodeId)
     const configuredInstructions =
       typeof node?.configuration['instructions'] === 'string' &&
       node.configuration['instructions'].trim() !== ''
@@ -167,7 +182,7 @@ export class MockNodeExecutor implements NodeExecutor {
                 ? configuredInstructions
                 : 'You are OpenBrain, an AI agent. Reply in the same language the user wrote in; be concise and useful.',
           },
-          { role: 'user', content: `${prompt}${memoryNote}` },
+          { role: 'user', content: `${prompt}${userNote}${memoryNote}` },
         ],
         model,
         temperature: provider.config.temperature,
@@ -177,7 +192,7 @@ export class MockNodeExecutor implements NodeExecutor {
       return { response: completion.content }
     }
     await delay(900 + rand(300), context.signal)
-    const logPrompt = `${prompt}${memoryNote}`.trim()
+    const logPrompt = `${prompt}${userNote}${memoryNote}`.trim()
     context.log(`LLM reasoning over: ${logPrompt.slice(0, 80)}`, { nodeId: context.currentNodeId })
     return { response: `Draft response generated for "${logPrompt.slice(0, 80)}"` }
   }
@@ -320,7 +335,7 @@ export class MockNodeExecutor implements NodeExecutor {
     const summary =
       typeof value === 'string' ? value : value === undefined ? '—' : JSON.stringify(value)
     context.log(`Output delivered: ${summary.slice(0, 80)}`, { level: 'success', nodeId: context.currentNodeId })
-    if (value !== undefined && inputs['download'] !== false) {
+    if (value !== undefined && inputs['download'] !== false && reportDownloadEnabled) {
       try {
         // Record this node's output before building the report, otherwise the
         // report's Node Outputs section omits the final result.

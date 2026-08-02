@@ -154,6 +154,7 @@ export interface BrainStore {
   setPendingFineTune: (spec: FineTuneJobSpec | null) => void
   addLog: (message: string, level?: LogLevel) => void
   setNode: (id: string, patch: Partial<BrainNode>) => void
+  setNodeConfiguration: (id: string, configuration: Record<string, unknown>) => void
   moveNode: (id: string, x: number, y: number) => void
   resetStatuses: () => void
 
@@ -257,6 +258,15 @@ export const useBrainStore = create<BrainStore>((set, get) => ({
   setNode: (id, patch) =>
     set((state) => ({
       nodes: state.nodes.map((node) => (node.id === id ? { ...node, ...patch } : node)),
+    })),
+
+  setNodeConfiguration: (id, configuration) =>
+    set((state) => ({
+      nodes: state.nodes.map((node) =>
+        node.id === id
+          ? { ...node, configuration: { ...(node.configuration ?? {}), ...configuration } }
+          : node,
+      ),
     })),
 
   moveNode: (id, x, y) =>

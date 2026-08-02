@@ -1,30 +1,29 @@
 import { useEffect, useRef, useState } from 'react'
 import { useBrainStore } from '../../store/useBrainStore'
-import { createFireworksAIProvider } from '../../core/providers/FireworksAIProvider'
-import {
-  buildPersona,
-  buildStandaloneHtml,
-  CHAT_CSS,
-  readFireworksApiKey,
-  type ChatMessage,
-} from './chatCore'
+import { runBrain } from '../canvas/executionAdapter'
+import { buildPersona, buildStandaloneHtml, CHAT_CSS, readFireworksApiKey, type ChatMessage } from './chatCore'
 
 export interface BrainChatProps {
   readonly open: boolean
+  readonly onOpen: () => void
   readonly onClose: () => void
 }
 
-export default function BrainChat({ open, onClose }: BrainChatProps) {
+// A small docked chat pill that TALKS TO THE REAL BRAIN: every message runs
+// the graph (browser fetch → memory → llm → output) so you watch the nodes
+// light up on the canvas as the assistant answers.
+export default function BrainChat({ open, onOpen, onClose }: BrainChatProps) {
   const nodes = useBrainStore((state) => state.nodes)
   const projectName = useBrainStore((state) => state.projectName)
+  const running = useBrainStore((state) => state.running)
   const addLog = useBrainStore((state) => state.addLog)
   const [messages, setMessages] = useState<readonly ChatMessage[]>([])
   const [input, setInput] = useState('')
-  const [streaming, setStreaming] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const bodyRef = useRef<HTMLDivElement>(null)
 
   const persona = buildPersona(nodes, projectName)
+  const llmNodeId = persona.nodeId
 
   // Live canvas → chat: when the architect's llm node changes (a new design,
   // a rebuilt brain), the chat restarts with the new personality instantly.
@@ -32,60 +31,44 @@ export default function BrainChat({ open, onClose }: BrainChatProps) {
     if (!open) return
     setMessages([])
     setError(null)
-    setStreaming(false)
-  }, [persona.nodeId, open])
+  }, [llmNodeId, open])
 
   useEffect(() => {
     const body = bodyRef.current
     if (body) body.scrollTop = body.scrollHeight
-  }, [messages, streaming])
-
-  if (!open) return null
+  }, [messages, running])
 
   const send = async () => {
     const text = input.trim()
-    if (text === '' || streaming) return
+    if (text === '' || running) return
     setInput('')
     setError(null)
-    const next = [...messages, { role: 'user' as const, content: text }]
-    setMessages(next)
-    setStreaming(true)
-    const assistant = { role: 'assistant' as const, content: '' }
-    setMessages([...next, assistant])
-    const controller = new AbortController()
-    const provider = createFireworksAIProvider()
+    setMessages([...messages, { role: 'user', content: text }])
     try {
-      const stream = provider.stream({
-        messages: [
-          { role: 'system', content: persona.systemPrompt },
-          ...next.map((message) => ({ role: message.role, content: message.content })),
-        ],
-        model: persona.model,
-        temperature: 0.6,
-        maxTokens: 1024,
-        signal: controller.signal,
-      })
-      for await (const chunk of stream) {
-        assistant.content += chunk.delta
-        setMessages([...next, { ...assistant }])
-      }
+      const answer = await runBrain({ userMessage: text, downloadReport: false })
+      setMessages((previous) => [
+        ...previous,
+        {
+          role: 'assistant',
+          content:
+            answer !== null && answer !== ''
+              ? answer
+              : 'The brain finished running but produced no text output — check the Agent log.',
+        },
+      ])
     } catch (err) {
-      if (controller.signal.aborted) return
       const detail = err instanceof Error ? err.message : String(err)
       setError(detail)
-      setMessages([...next, { role: 'assistant', content: '⚠ ' + detail }])
-    } finally {
-      setStreaming(false)
+      setMessages((previous) => [...previous, { role: 'assistant', content: '⚠ ' + detail }])
     }
   }
 
   const openInNewTab = () => {
-    const apiKey = readFireworksApiKey()
     const html = buildStandaloneHtml({
       title: projectName ?? 'OpenBrain app',
       systemPrompt: persona.systemPrompt,
       model: persona.model,
-      apiKey,
+      apiKey: readFireworksApiKey(),
       personaLabel: persona.label,
     })
     const blob = new Blob([html], { type: 'text/html' })
@@ -95,21 +78,36 @@ export default function BrainChat({ open, onClose }: BrainChatProps) {
     addLog('Chat app opened in a new tab', 'success')
   }
 
+  if (!open) {
+    return (
+      <>
+        <style>{CHAT_CSS}</style>
+        <button className="ob-chat-pill" onClick={onOpen} title="Open chat">
+          <iconify-icon icon="lucide:message-square" className="text-xl"></iconify-icon>
+          Chat
+        </button>
+      </>
+    )
+  }
+
   return (
-    <div className="ob-chat">
+    <>
       <style>{CHAT_CSS}</style>
-      <div className="ob-chat-card">
+      <div className="ob-chat">
         <div className="ob-chat-head">
           <div style={{ minWidth: 0 }}>
             <div className="ob-chat-title">{projectName ?? 'OpenBrain app'}</div>
-            <div className="ob-chat-sub">Personality: {persona.label}</div>
+            <div className="ob-chat-sub">
+              {persona.label}
+              {persona.model !== '' ? ` · ${persona.model.split('/').pop()}` : ''}
+            </div>
           </div>
           <div className="ob-chat-spacer" />
           <button className="ob-chat-btn" onClick={openInNewTab} title="Open the same chat in its own tab">
-            Open in new tab
+            New tab
           </button>
-          <button className="ob-chat-btn" onClick={onClose} title="Close preview">
-            ✕ Close
+          <button className="ob-chat-btn" onClick={onClose} title="Close chat">
+            ✕
           </button>
         </div>
         <div className="ob-chat-body" ref={bodyRef}>
@@ -117,36 +115,39 @@ export default function BrainChat({ open, onClose }: BrainChatProps) {
             <div className="ob-chat-empty">
               <b>Talk to the app you designed.</b>
               <br />
-              This assistant was built from your OpenBrain graph{persona.nodeId ? ' — its LLM node’s instructions are live, edit the canvas and it updates here in real time' : ''}.
+              Every message runs the real brain — browser, memory and LLM nodes
+              light up on the canvas as it answers.
+            </div>
+          )}
+          {running && (
+            <div className="ob-chat-run-note">
+              <span className="dot" />
+              Running your brain — watch the nodes…
             </div>
           )}
           {messages.map((message, index) => (
             <div key={index} className={`ob-chat-msg ${message.role}`}>
               {message.content}
-              {message.role === 'assistant' && index === messages.length - 1 && streaming ? '▍' : ''}
             </div>
           ))}
-          {streaming && messages[messages.length - 1]?.role !== 'assistant' && (
-            <div className="ob-chat-typing">Thinking…</div>
-          )}
           {error !== null && <div className="ob-chat-msg error">{error}</div>}
         </div>
         <div className="ob-chat-foot">
           <input
             className="ob-chat-input"
-            placeholder="Message your assistant…"
+            placeholder={running ? 'Brain is running…' : 'Message your assistant…'}
             value={input}
-            disabled={streaming}
+            disabled={running}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === 'Enter') void send()
             }}
           />
-          <button className="ob-chat-send" onClick={() => void send()} disabled={streaming}>
+          <button className="ob-chat-send" onClick={() => void send()} disabled={running}>
             Send
           </button>
         </div>
       </div>
-    </div>
+    </>
   )
 }
