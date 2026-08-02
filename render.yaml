@@ -7,9 +7,11 @@ services:
     buildCommand: npm install
     startCommand: node server.js
     healthCheckPath: /health
-    autoDeploy: false
+    autoDeploy: true
     envVars:
       - key: FIREWORKS_API_KEY
+        sync: false
+      - key: COMPOSIO_API_KEY
         sync: false
       - key: CLOUD_LLM_MODEL
         value: accounts/fireworks/models/deepseek-v4-flash

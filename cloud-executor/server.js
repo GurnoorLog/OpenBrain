@@ -2,9 +2,10 @@
 
 // HTTP entrypoint for the OpenBrain cloud executor (Render Web Service).
 //
-//   GET  /health  -> liveness probe
-//   GET  /fetch   -> ?url=... server-side page fetch (CORS proxy for the browser tool)
-//   POST /run     -> { brain: { nodes, connections }, memory? } -> { outputs, order, durationMs, log }
+//   GET  /health   -> liveness probe
+//   GET  /fetch    -> ?url=... server-side page fetch (CORS proxy for the browser tool)
+//   POST /run      -> { brain: { nodes, connections }, memory? } -> { outputs, order, durationMs, log }
+//   POST /composio -> { slug, arguments, apiKey?, connected_account_id? } -> { ok, data }
 //
 // CORS is wide open because the executor is a public compute endpoint; the
 // model API key lives only in this service's environment (server-side), so
@@ -117,6 +118,86 @@ async function handleFetch(req, res) {
   }
 }
 
+// Proxies a Composio tool execution so the in-browser GitHub/MCP tool nodes
+// work without CORS (Composio's preflight drops Access-Control-Allow-Origin).
+// The key comes from the caller or, preferably, this service's env so it never
+// leaves the server.
+async function handleComposio(req, res) {
+  const raw = await readBody(req, MAX_BODY_BYTES)
+  let payload
+  try {
+    payload = JSON.parse(raw)
+  } catch {
+    send(res, 400, { ok: false, error: 'Invalid JSON body.' })
+    return
+  }
+  const slug = typeof payload.slug === 'string' && payload.slug.trim() !== '' ? payload.slug.trim() : ''
+  if (slug === '') {
+    send(res, 400, { ok: false, error: 'Missing slug.' })
+    return
+  }
+  const args = payload.arguments && typeof payload.arguments === 'object' ? payload.arguments : {}
+  const apiKey =
+    typeof payload.apiKey === 'string' && payload.apiKey.trim() !== ''
+      ? payload.apiKey.trim()
+      : (process.env.COMPOSIO_API_KEY || '')
+  if (apiKey === '') {
+    send(res, 400, {
+      ok: false,
+      error: 'No Composio API key available on this service (set COMPOSIO_API_KEY).',
+    })
+    return
+  }
+  const upstreamBody = { arguments: args, version: 'latest' }
+  if (typeof payload.connected_account_id === 'string' && payload.connected_account_id !== '') {
+    upstreamBody.connected_account_id = payload.connected_account_id
+  }
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), 45000)
+  try {
+    const response = await fetch(
+      `https://backend.composio.dev/api/v3.1/tools/execute/${encodeURIComponent(slug)}`,
+      {
+        method: 'POST',
+        headers: { 'x-api-key': apiKey, 'Content-Type': 'application/json' },
+        body: JSON.stringify(upstreamBody),
+        signal: controller.signal,
+      },
+    )
+    const text = await response.text()
+    let parsed = null
+    try {
+      parsed = JSON.parse(text)
+    } catch {
+      parsed = null
+    }
+    if (!response.ok) {
+      const message =
+        parsed && parsed.error && parsed.error.message
+          ? parsed.error.message
+          : `Upstream HTTP ${response.status}`
+      send(res, 502, { ok: false, error: message })
+      return
+    }
+    if (parsed && parsed.successful === false) {
+      const detail =
+        parsed.error && typeof parsed.error === 'string'
+          ? parsed.error
+          : parsed.error && parsed.error.message
+            ? parsed.error.message
+            : 'Composio tool failed.'
+      send(res, 502, { ok: false, error: detail })
+      return
+    }
+    send(res, 200, { ok: true, data: parsed ? parsed.data : null })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    send(res, 502, { ok: false, error: message })
+  } finally {
+    clearTimeout(timeout)
+  }
+}
+
 const server = http.createServer((req, res) => {
   if (req.method === 'OPTIONS') {
     res.writeHead(204, CORS_HEADERS)
@@ -140,6 +221,14 @@ const server = http.createServer((req, res) => {
   if (req.method === 'POST' && url.pathname === '/run') {
     req.setTimeout(REQUEST_TIMEOUT_MS)
     handleRun(req, res).catch((error) => {
+      send(res, 500, { ok: false, error: error instanceof Error ? error.message : String(error) })
+    })
+    return
+  }
+
+  if (req.method === 'POST' && url.pathname === '/composio') {
+    req.setTimeout(60000)
+    handleComposio(req, res).catch((error) => {
       send(res, 500, { ok: false, error: error instanceof Error ? error.message : String(error) })
     })
     return

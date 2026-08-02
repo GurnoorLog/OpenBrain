@@ -76,6 +76,90 @@ function firstValue(inputs) {
   return ''
 }
 
+// Runs a Composio tool with the server-side key. Returns an { ok, ... } object
+// that becomes the node's outputs; failures resolve gracefully (the node is
+// marked failed by the caller) instead of killing the whole run.
+async function runComposioTool(slug, args, pushLog, nodeId) {
+  const apiKey = process.env.COMPOSIO_API_KEY || ''
+  if (apiKey === '') {
+    pushLog(`${slug} skipped — set COMPOSIO_API_KEY on this service.`, 'warning', nodeId)
+    return { ok: false, result: 'No COMPOSIO_API_KEY set on the cloud executor.' }
+  }
+  pushLog(`Composio: ${slug}…`, 'info', nodeId)
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), 45000)
+  try {
+    const response = await fetch(
+      `https://backend.composio.dev/api/v3.1/tools/execute/${encodeURIComponent(slug)}`,
+      {
+        method: 'POST',
+        headers: { 'x-api-key': apiKey, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ arguments: args, version: 'latest' }),
+        signal: controller.signal,
+      },
+    )
+    const text = await response.text()
+    let parsed = null
+    try {
+      parsed = JSON.parse(text)
+    } catch {
+      parsed = null
+    }
+    if (!response.ok) {
+      const message =
+        parsed && parsed.error && parsed.error.message
+          ? parsed.error.message
+          : `Upstream HTTP ${response.status}`
+      pushLog(`${slug} failed: ${message}`, 'error', nodeId)
+      return { ok: false, result: message }
+    }
+    if (parsed && parsed.successful === false) {
+      const detail =
+        parsed.error && typeof parsed.error === 'string'
+          ? parsed.error
+          : (parsed.error && parsed.error.message) || 'Composio tool failed.'
+      pushLog(`${slug} failed: ${detail}`, 'error', nodeId)
+      return { ok: false, result: detail }
+    }
+    pushLog(`${slug} completed.`, 'success', nodeId)
+    const data = parsed ? parsed.data : null
+    const unwrapped =
+      data && typeof data === 'object' && 'response_data' in data ? data.response_data : data
+    if (slug.startsWith('GITHUB_') && Array.isArray(unwrapped)) {
+      return {
+        ok: true,
+        repos: unwrapped.map((entry) => {
+          if (typeof entry === 'string') return entry
+          const owner = entry && entry.owner && entry.owner.login
+          const name = entry && entry.name
+          const fullName = entry && entry.full_name
+          return String(fullName ?? (owner ? `${owner}/${name ?? ''}` : name ?? JSON.stringify(entry)))
+        }),
+        result: unwrapped,
+      }
+    }
+    return { ok: true, result: unwrapped, data: unwrapped }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    pushLog(`${slug} failed: ${message}`, 'error', nodeId)
+    return { ok: false, result: message }
+  } finally {
+    clearTimeout(timeout)
+  }
+}
+
+// Merges the architect-stamped configuration.arguments with any edge-fed input
+// ports (owner, repo, username, query, …) that the arguments don't already set.
+function mergeToolArgs(configArguments, inputs) {
+  const args = { ...(configArguments && typeof configArguments === 'object' ? configArguments : {}) }
+  for (const key of ['owner', 'repo', 'username', 'query', 'q', 'issue_number', 'pr_number']) {
+    if (args[key] === undefined && typeof inputs[key] === 'string' && inputs[key].trim() !== '') {
+      args[key] = inputs[key].trim()
+    }
+  }
+  return args
+}
+
 function computeOrder(nodes, connections) {
   const indegree = new Map(nodes.map((node) => [node.id, 0]))
   const incoming = new Map(nodes.map((node) => [node.id, []]))
@@ -219,10 +303,24 @@ async function executeBrain({ nodes, connections, memory }) {
         result = { pages: ['https://example.com', 'https://developer.mozilla.org'] }
         break
 
-      case 'github':
-        pushLog('GitHub read repositories.', 'info', nodeId)
-        result = { repos: ['acme/api-service', 'acme/web-app'] }
+      case 'github': {
+        const slug =
+          typeof config.tool === 'string' && config.tool.trim() !== ''
+            ? config.tool.trim()
+            : 'GITHUB_LIST_REPOSITORIES_FOR_THE_AUTHENTICATED_USER'
+        result = await runComposioTool(slug, mergeToolArgs(config.arguments, inputs), pushLog, nodeId)
         break
+      }
+
+      case 'tool':
+      case 'mcp': {
+        const slug =
+          typeof config.tool === 'string' && config.tool.trim() !== ''
+            ? config.tool.trim()
+            : 'HACKERNEWS_GET_TOP_STORIES'
+        result = await runComposioTool(slug, mergeToolArgs(config.arguments, inputs), pushLog, nodeId)
+        break
+      }
 
       case 'rag':
         pushLog(`RAG retrieved documents for "${firstValue(inputs) || 'context'}".`, 'info', nodeId)
@@ -247,12 +345,6 @@ async function executeBrain({ nodes, connections, memory }) {
       case 'gate':
         pushLog(inputs.condition === false ? 'Gate blocked.' : 'Gate passed.', 'info', nodeId)
         result = { passed: inputs.condition !== false }
-        break
-
-      case 'tool':
-      case 'mcp':
-        pushLog(`${node.type.toUpperCase()} tool ran with "${firstValue(inputs) || 'no input'}".`, 'info', nodeId)
-        result = { result: { tool: node.type, input: firstValue(inputs), ok: true } }
         break
 
       case 'subbrain':

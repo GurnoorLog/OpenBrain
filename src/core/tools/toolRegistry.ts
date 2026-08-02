@@ -242,6 +242,11 @@ function mergeInputArgs(inputs: NodeInputs, args: Record<string, unknown>): Reco
 // POST /api/v3.1/tools/execute/{tool_slug}. Passing version "latest" avoids the
 // ToolVersionRequiredError the API raises for direct execution. Without a
 // connected_account_id Composio falls back to the project's default account.
+//
+// Composio's CORS preflight drops Access-Control-Allow-Origin, so browsers
+// can't call it directly — the request is routed through the Render cloud
+// executor's /composio proxy (wide-open CORS, server-side fetch). When no
+// proxy is configured the direct call is kept as a fallback (local dev / tests).
 async function composioExecute(
   slug: string,
   args: Record<string, unknown>,
@@ -251,6 +256,30 @@ async function composioExecute(
   const body: Record<string, unknown> = { arguments: args, version: 'latest' }
   const accountId = getComposioAccountId()
   if (accountId) body.connected_account_id = accountId
+
+  const baseUrl = import.meta.env.VITE_CLOUD_EXECUTOR_URL as string | undefined
+  if (baseUrl) {
+    const proxyBody: Record<string, unknown> = { slug, arguments: args, ...body }
+    if (apiKey) proxyBody.apiKey = apiKey
+    const response = await fetch(`${baseUrl.replace(/\/$/, '')}/composio`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(proxyBody),
+      signal,
+    })
+    const text = await response.text().catch(() => '')
+    let parsed: { ok?: boolean; data?: unknown; error?: string } | null = null
+    try {
+      parsed = JSON.parse(text) as { ok?: boolean; data?: unknown; error?: string } | null
+    } catch {
+      parsed = null
+    }
+    if (!response.ok || parsed?.ok === false) {
+      throw new Error(parsed?.error ?? `Composio proxy returned HTTP ${response.status}`)
+    }
+    return parsed?.data
+  }
+
   const response = await fetch(`${COMPOSIO_API_URL}/tools/execute/${encodeURIComponent(slug)}`, {
     method: 'POST',
     headers: { 'x-api-key': apiKey, 'Content-Type': 'application/json' },

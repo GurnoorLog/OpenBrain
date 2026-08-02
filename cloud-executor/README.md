@@ -21,6 +21,7 @@ Zero runtime dependencies (plain Node 18+).
    | Where        | Variable                  | Value                                  |
    |--------------|---------------------------|----------------------------------------|
    | web service  | `FIREWORKS_API_KEY`       | your Fireworks API key                 |
+   | web service  | `COMPOSIO_API_KEY`        | your Composio API key (drives GitHub/MCP tool nodes) |
    | web service  | `CLOUD_LLM_MODEL`         | optional (defaults to deepseek-v4-flash) |
    | workflow     | `FIREWORKS_API_KEY`       | your Fireworks API key                 |
    | workflow     | `SUPABASE_URL`            | your project URL                       |
@@ -38,6 +39,16 @@ POST /run
 { "brain": { "nodes": [...], "connections": [...] }, "memory": "" }
 
 -> { "ok": true, "outputs": { nodeId: { response, ... } }, "order": [...], "durationMs": 1234, "log": [...] }
+
+POST /composio
+{ "slug": "HACKERNEWS_SEARCH_POSTS", "arguments": { "query": "AI" }, "apiKey": "optional browser-held key" }
+
+-> { "ok": true, "data": <tool result> }
+
+The /composio endpoint is a CORS proxy for the in-browser GitHub/MCP tool
+nodes (Composio's preflight drops Access-Control-Allow-Origin, so browsers
+cannot call Composio directly). The key comes from the request or, preferably,
+from the service's COMPOSIO_API_KEY env.
 ```
 
 ## Test locally
