@@ -164,6 +164,236 @@ function findUserMessage(nodes: Readonly<Array<{ readonly configuration?: Readon
   return ''
 }
 
+// ---------------------------------------------------------------------------
+// Composio-backed tools (GitHub + generic MCP). One API key drives every
+// Composio tool call; a connected account (created once in the Composio
+// dashboard) authenticates the underlying app. For a hackathon demo the key is
+// bundled via VITE_COMPOSIO_API_KEY so end users never configure anything.
+// ---------------------------------------------------------------------------
+const COMPOSIO_API_URL = 'https://backend.composio.dev/api/v3.1'
+const COMPOSIO_KEY_STORAGE = `${KEY_PREFIX}composio`
+const COMPOSIO_ACCOUNT_STORAGE = `${KEY_PREFIX}composio-account`
+
+export function getComposioApiKey(): string | null {
+  const local = getToolKey('composio')
+  if (local && local.trim() !== '') return local.trim()
+  const env = import.meta.env.VITE_COMPOSIO_API_KEY as string | undefined
+  return env && env.trim() !== '' ? env.trim() : null
+}
+
+export function getComposioAccountId(): string | null {
+  try {
+    const local = localStorage.getItem(COMPOSIO_ACCOUNT_STORAGE)
+    if (local && local.trim() !== '') return local.trim()
+  } catch {
+    /* ignore */
+  }
+  const env = import.meta.env.VITE_COMPOSIO_ACCOUNT_ID as string | undefined
+  return env && env.trim() !== '' ? env.trim() : null
+}
+
+export function setComposioAccountId(value: string): void {
+  try {
+    localStorage.setItem(COMPOSIO_ACCOUNT_STORAGE, value.trim())
+  } catch {
+    /* ignore */
+  }
+}
+
+// Reads a field the architect stamped onto the node's configuration (e.g.
+// { "tool": "GITHUB_GET_A_USER", "arguments": { "username": "octocat" } }).
+function nodeConfigValue(context: ExecutionContext, key: string): unknown {
+  const node = context.brain.nodes.find((entry) => entry.id === context.currentNodeId)
+  if (!node?.configuration) return undefined
+  return node.configuration[key]
+}
+
+// The architect may write "arguments" as a JSON object or as a JSON string.
+function parseArguments(raw: unknown): Record<string, unknown> {
+  if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+    return { ...(raw as Record<string, unknown>) }
+  }
+  if (typeof raw === 'string' && raw.trim() !== '') {
+    try {
+      const parsed = JSON.parse(raw) as unknown
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        return { ...(parsed as Record<string, unknown>) }
+      }
+    } catch {
+      /* not JSON — ignore */
+    }
+  }
+  return {}
+}
+
+// Edge-fed ports (owner, repo, username, query, …) become tool arguments too,
+// so an upstream node can hand the GitHub tool a target to act on.
+function mergeInputArgs(inputs: NodeInputs, args: Record<string, unknown>): Record<string, unknown> {
+  const merged = { ...args }
+  for (const [key, value] of Object.entries(inputs)) {
+    if (key === 'input' || key === 'context') continue
+    if (merged[key] === undefined && typeof value === 'string' && value.trim() !== '') {
+      merged[key] = value.trim()
+    }
+  }
+  return merged
+}
+
+// POST /api/v3.1/tools/execute/{tool_slug}. Passing version "latest" avoids the
+// ToolVersionRequiredError the API raises for direct execution. Without a
+// connected_account_id Composio falls back to the project's default account.
+async function composioExecute(
+  slug: string,
+  args: Record<string, unknown>,
+  apiKey: string,
+  signal: AbortSignal,
+): Promise<unknown> {
+  const body: Record<string, unknown> = { arguments: args, version: 'latest' }
+  const accountId = getComposioAccountId()
+  if (accountId) body.connected_account_id = accountId
+  const response = await fetch(`${COMPOSIO_API_URL}/tools/execute/${encodeURIComponent(slug)}`, {
+    method: 'POST',
+    headers: { 'x-api-key': apiKey, 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+    signal,
+  })
+  const raw = await response.text().catch(() => '')
+  if (!response.ok) {
+    let detail = `HTTP ${response.status}`
+    try {
+      const parsed = JSON.parse(raw) as { error?: { message?: string } }
+      if (parsed?.error?.message) detail = `${detail}: ${parsed.error.message}`
+    } catch {
+      if (raw.trim() !== '') detail = `${detail}: ${raw.slice(0, 200)}`
+    }
+    throw new Error(`Composio request failed (${detail})`)
+  }
+  let parsed: { data?: unknown; error?: unknown; successful?: boolean } | null = null
+  try {
+    parsed = JSON.parse(raw) as { data?: unknown; error?: unknown; successful?: boolean }
+  } catch {
+    throw new Error(`Composio returned an invalid response: ${raw.slice(0, 120)}`)
+  }
+  if (parsed.successful === false) {
+    throw new Error(
+      typeof parsed.error === 'string' && parsed.error !== ''
+        ? `Composio tool failed: ${parsed.error}`
+        : 'Composio tool execution failed.',
+    )
+  }
+  const data = parsed.data as { response_data?: unknown } | undefined
+  if (data && typeof data === 'object' && 'response_data' in data) return data.response_data
+  return parsed.data
+}
+
+function stringifyResult(data: unknown): string {
+  if (data === null || data === undefined) return ''
+  if (typeof data === 'string') return data
+  try {
+    return JSON.stringify(data, null, 2)
+  } catch {
+    return String(data)
+  }
+}
+
+// Best-effort conversion of a GitHub repos/PRs/issues payload into a list of
+// readable labels for the node's "repos" output port.
+function listOfStrings(data: unknown): string[] {
+  if (!Array.isArray(data)) return []
+  return data.map((entry) => {
+    if (typeof entry === 'string') return entry
+    const owner = (entry as { owner?: { login?: unknown } })?.owner?.login
+    const name = (entry as { name?: unknown })?.name
+    const fullName = (entry as { full_name?: unknown })?.full_name
+    return String(
+      fullName ?? (owner ? `${owner}/${name ?? ''}` : name ?? stringifyResult(entry)),
+    )
+  })
+}
+
+const COMPOSIO_KEY_INSTRUCTIONS = [
+  'This tool runs on the bundled Composio API key — no setup needed for a normal run.',
+  'To use your own key instead: create one at https://app.composio.dev (Settings → API Keys) and paste it here; it is stored only in your browser.',
+  'For GitHub actions, connect the GitHub account once at https://app.composio.dev/connections and add its Connected Account ID (ca_…) in Settings under this tool.',
+]
+
+export const GITHUB_TOOL: ToolDefinition = {
+  id: 'github',
+  nodeType: 'github',
+  name: 'GitHub',
+  description: 'Run a real GitHub operation via Composio (repos, issues, PRs, search)',
+  icon: 'lucide:github',
+  accent: '#94a3b8',
+  needsKey: true,
+  keyStorageKey: COMPOSIO_KEY_STORAGE,
+  keyEnvHint: 'VITE_COMPOSIO_API_KEY',
+  keyInstructions: COMPOSIO_KEY_INSTRUCTIONS,
+  inputs: [
+    { id: 'owner', label: 'Owner', kind: 'text' },
+    { id: 'repo', label: 'Repo', kind: 'text' },
+  ],
+  outputs: [
+    { id: 'repos', label: 'Repos', kind: 'list' },
+    { id: 'result', label: 'Result', kind: 'text' },
+  ],
+  async execute(inputs, context, apiKey) {
+    const key = apiKey ?? getComposioApiKey()
+    if (!key) throw new Error('GitHub tool needs a Composio API key. Add it when prompted, then run again.')
+    const configured = String(nodeConfigValue(context, 'tool') ?? '').trim()
+    const toolSlug =
+      configured !== ''
+        ? configured
+        : 'GITHUB_LIST_REPOSITORIES_FOR_THE_AUTHENTICATED_USER'
+    const args = mergeInputArgs(inputs, parseArguments(nodeConfigValue(context, 'arguments')))
+    context.log(`GitHub tool: executing ${toolSlug}…`, { nodeId: context.currentNodeId })
+    const data = await composioExecute(toolSlug, args, key, context.signal)
+    context.log(`GitHub tool: ${toolSlug} completed.`, {
+      level: 'success',
+      nodeId: context.currentNodeId,
+    })
+    return { repos: listOfStrings(data), result: stringifyResult(data) }
+  },
+}
+
+export const MCP_TOOL: ToolDefinition = {
+  id: 'mcp',
+  nodeType: 'mcp',
+  name: 'MCP Tools',
+  description: 'Execute any Composio tool by slug (Slack, Notion, Gmail, Hacker News, Wikipedia, …)',
+  icon: 'lucide:plug-zap',
+  accent: '#22d3ee',
+  needsKey: true,
+  keyStorageKey: COMPOSIO_KEY_STORAGE,
+  keyEnvHint: 'VITE_COMPOSIO_API_KEY',
+  keyInstructions: COMPOSIO_KEY_INSTRUCTIONS,
+  inputs: [{ id: 'input', label: 'Input', kind: 'any' }],
+  outputs: [
+    { id: 'result', label: 'Result', kind: 'any' },
+    { id: 'data', label: 'Data', kind: 'text' },
+  ],
+  async execute(inputs, context, apiKey) {
+    const key = apiKey ?? getComposioApiKey()
+    if (!key) throw new Error('MCP tool needs a Composio API key. Add it when prompted, then run again.')
+    const configured = String(nodeConfigValue(context, 'tool') ?? '').trim()
+    const toolSlug = configured !== '' ? configured : 'HACKERNEWS_GET_TOP_STORIES'
+    const args = mergeInputArgs(inputs, parseArguments(nodeConfigValue(context, 'arguments')))
+    if (configured === '') {
+      context.log(
+        'MCP tool: no configuration.tool set — defaulting to HACKERNEWS_GET_TOP_STORIES (no auth needed).',
+        { nodeId: context.currentNodeId },
+      )
+    }
+    context.log(`MCP tool: executing ${toolSlug}…`, { nodeId: context.currentNodeId })
+    const data = await composioExecute(toolSlug, args, key, context.signal)
+    context.log(`MCP tool: ${toolSlug} completed.`, {
+      level: 'success',
+      nodeId: context.currentNodeId,
+    })
+    const result = stringifyResult(data)
+    return { result, data: result }
+  },
+}
+
 export const NEWS_TOOL: ToolDefinition = {
   id: 'news',
   nodeType: 'news',
@@ -331,7 +561,13 @@ export const BROWSER_TOOL: ToolDefinition = {
   },
 }
 
-export const TOOLS: readonly ToolDefinition[] = [NEWS_TOOL, IMAGEGEN_TOOL, BROWSER_TOOL]
+export const TOOLS: readonly ToolDefinition[] = [
+  NEWS_TOOL,
+  IMAGEGEN_TOOL,
+  BROWSER_TOOL,
+  GITHUB_TOOL,
+  MCP_TOOL,
+]
 
 const TOOL_BY_NODE_TYPE: Readonly<Record<string, ToolDefinition>> = Object.fromEntries(
   TOOLS.map((tool) => [tool.nodeType, tool]),

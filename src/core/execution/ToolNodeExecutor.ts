@@ -9,7 +9,14 @@ export class ToolNodeExecutor {
   constructor(private readonly tool: ToolDefinition) {}
 
   async execute(inputs: NodeInputs, context: ExecutionContext): Promise<NodeOutputs> {
-    const apiKey = this.tool.needsKey ? localStorage.getItem(this.tool.keyStorageKey) : null
+    // A key stored by the user (Settings → Tool keys) wins; otherwise fall back
+    // to the key bundled at build time via the tool's VITE_* env hint so the
+    // demo works without the user configuring anything.
+    const apiKey = this.tool.needsKey
+      ? (localStorage.getItem(this.tool.keyStorageKey) ??
+        (import.meta.env[this.tool.keyEnvHint] as string | undefined) ??
+        null)
+      : null
     if (this.tool.needsKey && !apiKey) {
       throw new Error(
         `${this.tool.name} needs an API key to run. Add it via Settings → Tool keys, then run again.`,

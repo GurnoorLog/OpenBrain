@@ -175,7 +175,8 @@ export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
           </div>
           <div className="mt-3 flex flex-col gap-1.5">
             {TOOLS.filter((tool) => tool.needsKey).map((tool) => {
-              const set = Boolean(localStorage.getItem(tool.keyStorageKey))
+              const envKey = import.meta.env[tool.keyEnvHint] as string | undefined
+              const set = Boolean(localStorage.getItem(tool.keyStorageKey) ?? envKey)
               return (
                 <div key={tool.id} className="flex items-center justify-between px-3 py-2 rounded-lg bg-white/5 border border-white/10">
                   <span className="text-sm text-gray-300">{tool.name} API key</span>

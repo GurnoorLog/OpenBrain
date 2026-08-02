@@ -46,9 +46,16 @@ export const NODE_CATALOG: readonly NodeCatalogEntry[] = [
   },
   {
     type: 'github',
-    description: 'Read repositories and issues',
-    inputs: [],
-    outputs: [{ id: 'repos', label: 'Repos', kind: 'list' }],
+    description:
+      'Run a real GitHub operation through Composio. MUST set "configuration" as { "tool": "<Composio GitHub tool slug>", "arguments": { ... } }. Valid slugs include GITHUB_GET_A_USER ({"username"}), GITHUB_LIST_REPOSITORIES_FOR_THE_AUTHENTICATED_USER ({}), GITHUB_GET_A_REPOSITORY ({"owner","repo"}), GITHUB_GET_A_REPOSITORY_README ({"owner","repo"}), GITHUB_LIST_REPOSITORY_ISSUES ({"owner","repo"}), GITHUB_GET_AN_ISSUE ({"owner","repo","issue_number"}), GITHUB_SEARCH_REPOSITORIES ({"q"}).',
+    inputs: [
+      { id: 'owner', label: 'Owner', kind: 'text' },
+      { id: 'repo', label: 'Repo', kind: 'text' },
+    ],
+    outputs: [
+      { id: 'repos', label: 'Repos', kind: 'list' },
+      { id: 'result', label: 'Result', kind: 'text' },
+    ],
   },
   {
     type: 'filesystem',
@@ -104,7 +111,8 @@ export const NODE_CATALOG: readonly NodeCatalogEntry[] = [
   },
   {
     type: 'mcp',
-    description: 'Call an external MCP tool',
+    description:
+      'Execute any Composio tool by slug. MUST set "configuration" as { "tool": "<Composio tool slug>", "arguments": { ... } }. Valid no-auth examples include HACKERNEWS_GET_TOP_STORIES ({}), HACKERNEWS_SEARCH_POSTS ({"query"}), HACKERNEWS_GET_USER ({"username"}). For apps with auth the slug is {TOOLKIT}_{ACTION}, e.g. SLACK_SEND_MESSAGE, NOTION_CREATE_PAGE.',
     inputs: [{ id: 'input', label: 'Input', kind: 'any' }],
     outputs: [{ id: 'result', label: 'Result', kind: 'any' }],
   },

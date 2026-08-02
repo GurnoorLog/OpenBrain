@@ -64,7 +64,10 @@ export async function runBrain(options: RunBrainOptions = {}): Promise<string | 
 
   const toolNode = store.nodes.find((node) => {
     const tool = toolForNodeType(node.type)
-    return tool && tool.needsKey && !localStorage.getItem(tool.keyStorageKey)
+    if (!tool || !tool.needsKey) return false
+    const hasKey =
+      localStorage.getItem(tool.keyStorageKey) ?? import.meta.env[tool.keyEnvHint]
+    return !hasKey
   })
   if (toolNode) {
     const tool = toolForNodeType(toolNode.type)
