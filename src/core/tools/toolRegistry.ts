@@ -111,6 +111,32 @@ async function fetchViaProxy(url: string, signal: AbortSignal): Promise<string> 
   return fetchText(url, signal)
 }
 
+interface WikipediaExtractResponse {
+  readonly query?: {
+    readonly pages?: readonly { readonly extract?: string }[]
+  }
+}
+
+// Naive tag-stripping of a Wikipedia page returns the navigation/TOC boilerplate
+// before the article body, so a fixed-size prefix window misses the meat of the
+// page. When the target is a Wikipedia article, rewrite it to the MediaWiki API
+// and pull the plain-text extract of the whole article instead.
+function wikipediaExtractUrl(url: string): string | null {
+  const match = /^https?:\/\/([a-z]{2})\.wikipedia\.org\/wiki\/([^#?]+)/i.exec(url)
+  if (!match) return null
+  const title = decodeURIComponent(match[2]).replace(/_/g, ' ')
+  if (title.trim() === '') return null
+  const lang = match[1].toLowerCase()
+  return `https://${lang}.wikipedia.org/w/api.php?action=query&prop=extracts&explaintext=1&format=json&formatversion=2&origin=*&titles=${encodeURIComponent(title)}`
+}
+
+async function fetchWikipediaExtract(apiUrl: string, signal: AbortSignal): Promise<string> {
+  const raw = await fetchViaProxy(apiUrl, signal)
+  const json = JSON.parse(raw) as WikipediaExtractResponse
+  const extract = json?.query?.pages?.[0]?.extract ?? ''
+  return extract.replace(/\s+/g, ' ').trim()
+}
+
 export const NEWS_TOOL: ToolDefinition = {
   id: 'news',
   nodeType: 'news',
@@ -232,6 +258,22 @@ export const BROWSER_TOOL: ToolDefinition = {
       'https://en.wikipedia.org/wiki/Artificial_intelligence',
     )
     context.log(`Browser tool: fetching ${url}…`, { nodeId: context.currentNodeId })
+    const wikiApiUrl = wikipediaExtractUrl(url)
+    if (wikiApiUrl !== null) {
+      try {
+        const extract = await fetchWikipediaExtract(wikiApiUrl, context.signal)
+        if (extract !== '') {
+          const content = extract.slice(0, 15000)
+          context.log(`Browser tool: fetched ${content.length} chars (Wikipedia plain text) from ${url}.`, {
+            level: 'success',
+            nodeId: context.currentNodeId,
+          })
+          return { pages: [{ url, content }], content, url }
+        }
+      } catch {
+        /* fall through to the generic HTML path */
+      }
+    }
     const text = await fetchViaProxy(url, context.signal)
     const cleaned = text
       .replace(/<script[\s\S]*?<\/script>/gi, ' ')
@@ -239,7 +281,7 @@ export const BROWSER_TOOL: ToolDefinition = {
       .replace(/<[^>]+>/g, ' ')
       .replace(/\s+/g, ' ')
       .trim()
-    const content = cleaned.slice(0, 6000)
+    const content = cleaned.slice(0, 12000)
     context.log(`Browser tool: fetched ${text.length} chars from ${url}.`, {
       level: 'success',
       nodeId: context.currentNodeId,
