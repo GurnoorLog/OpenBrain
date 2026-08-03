@@ -14,6 +14,14 @@ docker compose up -d    # OpenBrain Desktop + Runtime + Ollama
 # open http://localhost:8080
 ```
 
+Already have a native Ollama running on the host? Point the runtime at it instead of pulling a second one:
+
+```bash
+# in .env:  OLLAMA_PORT=11435  (avoid the port clash)
+docker compose up -d runtime --build
+OLLAMA_URL=http://host.docker.internal:11434 docker compose up -d runtime
+```
+
 Optional services:
 
 ```bash

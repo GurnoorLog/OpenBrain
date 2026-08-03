@@ -30,7 +30,7 @@ services:
       - COMPOSIO_API_KEY=${COMPOSIO_API_KEY:-}
       - COMPOSIO_ACCOUNT_ID=${COMPOSIO_ACCOUNT_ID:-}
       - COMPOSIO_ENTITY_ID=${COMPOSIO_ENTITY_ID:-}
-      - OLLAMA_URL=http://ollama:11434
+      - OLLAMA_URL=${OLLAMA_URL:-http://ollama:11434}
     volumes:
       - ./workspace:/workspace
       - ./plugins:/app/plugins:ro
@@ -46,7 +46,7 @@ services:
     image: ollama/ollama:latest
     container_name: openbrain-ollama
     ports:
-      - "11434:11434"
+      - "${OLLAMA_PORT:-11434}:11434"
     volumes:
       - ollama:/root/.ollama
     restart: unless-stopped
