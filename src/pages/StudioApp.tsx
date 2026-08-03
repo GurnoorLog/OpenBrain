@@ -17,12 +17,14 @@ import { runShortcut } from '../components/keyboardShortcuts'
 import { useBrainStore } from '../store/useBrainStore'
 import { useAuth } from '../core/auth/useAuth'
 import { updateProject, buildProjectData } from '../core/projects/projectsRepository'
+import { saveGuestProject } from '../core/projects/guestProjectsRepository'
 import { loadSharedBrain } from '../core/brainIo'
 import { getBrainMemoryStore } from '../core/memory/brainMemory'
 
 export default function StudioApp() {
   const zoomRef = useRef<HTMLDivElement>(null)
   const projectId = useBrainStore((state) => state.projectId)
+  const projectName = useBrainStore((state) => state.projectName)
   const projectPrompt = useBrainStore((state) => state.projectPrompt)
   const projectOwnerId = useBrainStore((state) => state.projectOwnerId)
   const nodes = useBrainStore((state) => state.nodes)
@@ -94,6 +96,35 @@ export default function StudioApp() {
     }, 1200)
     return () => window.clearTimeout(timer)
   }, [projectId, projectPrompt, projectOwnerId, nodes, connections, generating, user])
+
+  // Guest brains autosave to the machine (localStorage). The cloud autosave
+  // above is skipped for guests (ownerId 'guest', no Supabase user), so this
+  // is where their work is persisted — nothing leaves the device.
+  useEffect(() => {
+    if (!projectId || projectOwnerId !== 'guest' || generating || nodes.length === 0) return
+    const timer = window.setTimeout(() => {
+      saveGuestProject({
+        id: projectId,
+        name: projectName ?? 'Untitled Brain',
+        description: projectPrompt ?? null,
+        data: buildProjectData(
+          projectPrompt ?? '',
+          nodes.map(({ id, type, x, y, content, reason, model }) => ({
+            id,
+            type,
+            x,
+            y,
+            content,
+            reason,
+            model,
+          })),
+          connections,
+        ),
+      })
+      useBrainStore.getState().addLog('Autosaved to this machine', 'success')
+    }, 1200)
+    return () => window.clearTimeout(timer)
+  }, [projectId, projectName, projectPrompt, projectOwnerId, nodes, connections, generating])
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {

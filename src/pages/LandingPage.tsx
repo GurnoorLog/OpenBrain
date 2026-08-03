@@ -23,12 +23,12 @@ function useRevealObserver() {
 }
 
 export default function LandingPage() {
-  const { user } = useAuth()
+  const { user, guest } = useAuth()
   const { go } = useNavigation()
   const pageRef = useRevealObserver()
 
   const enter = () => {
-    if (user) go('dashboard')
+    if (user || guest) go('dashboard')
     else go('auth', { authMode: 'signup' })
   }
 

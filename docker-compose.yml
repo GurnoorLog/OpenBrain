@@ -22,6 +22,16 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        VITE_FIREWORKS_API_KEY: ${VITE_FIREWORKS_API_KEY:-}
+        VITE_SUPABASE_URL: ${VITE_SUPABASE_URL:-}
+        VITE_SUPABASE_ANON_KEY: ${VITE_SUPABASE_ANON_KEY:-}
+        VITE_CLOUD_EXECUTOR_URL: ${VITE_CLOUD_EXECUTOR_URL:-}
+        VITE_COMPOSIO_API_KEY: ${VITE_COMPOSIO_API_KEY:-}
+        VITE_COMPOSIO_ACCOUNT_ID: ${VITE_COMPOSIO_ACCOUNT_ID:-}
+        VITE_COMPOSIO_ENTITY_ID: ${VITE_COMPOSIO_ENTITY_ID:-}
+        VITE_HF_TOKEN: ${VITE_HF_TOKEN:-}
+        VITE_RUNTIME_URL: ${VITE_RUNTIME_URL:-}
     container_name: openbrain-runtime
     ports:
       - "${OPENBRAIN_PORT:-8080}:8080"

@@ -7,7 +7,7 @@ import './landing.css'
 
 export default function AuthPage() {
   const { authMode, go } = useNavigation()
-  const { signInWithEmail, signUpWithEmail, signInWithGoogle, configured } = useAuth()
+  const { signInWithEmail, signUpWithEmail, signInWithGoogle, signInAsGuest, configured } = useAuth()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [busy, setBusy] = useState(false)
@@ -60,6 +60,11 @@ export default function AuthPage() {
     } finally {
       setBusy(false)
     }
+  }
+
+  const onGuest = () => {
+    signInAsGuest()
+    go('dashboard')
   }
 
   const setMode = (next: AuthMode) => {
@@ -176,6 +181,25 @@ export default function AuthPage() {
             </svg>
             Continue with Google
           </button>
+
+          <div className="flex items-center gap-3 mt-4">
+            <div className="flex-1 h-px bg-white/10"></div>
+            <span className="text-[11px] text-gray-500 uppercase tracking-widest font-bold">or</span>
+            <div className="flex-1 h-px bg-white/10"></div>
+          </div>
+
+          <button
+            onClick={onGuest}
+            disabled={busy}
+            className="w-full py-3 rounded-xl bg-white/5 border border-dashed border-white/15 text-sm font-semibold flex items-center justify-center gap-3 hover:bg-white/10 transition-colors disabled:opacity-50"
+            title="No account needed — everything stays on this machine"
+          >
+            <iconify-icon icon="lucide:laptop" className="text-teal-400 text-lg"></iconify-icon>
+            Continue as guest
+          </button>
+          <p className="text-[11px] text-gray-600 text-center mt-2">
+            Guest mode runs 100% on your machine — brains, memory and files never leave it.
+          </p>
         </div>
       </div>
     </div>

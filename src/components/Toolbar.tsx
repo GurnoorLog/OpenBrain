@@ -18,7 +18,7 @@ export default function Toolbar() {
   const setHubOpen = useBrainStore((state) => state.setHubOpen)
   const setShowGrid = useBrainStore((state) => state.setShowGrid)
   const showGrid = useBrainStore((state) => state.showGrid)
-  const { user } = useAuth()
+  const { user, guest } = useAuth()
   const [saving, setSaving] = useState(false)
 
   const saveToProject = async () => {
@@ -30,7 +30,12 @@ export default function Toolbar() {
       return
     }
     if (!user || projectOwnerId !== user.id) {
-      store.addLog('You can only save to projects you own', 'warning')
+      store.addLog(
+        guest
+          ? 'Guest mode autosaves on this machine — use "Export as .brain" to keep a copy'
+          : 'You can only save to projects you own',
+        'warning',
+      )
       return
     }
     setSaving(true)

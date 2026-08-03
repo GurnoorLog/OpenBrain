@@ -30,7 +30,7 @@ export default function Header() {
   const menuRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const running = useBrainStore((state) => state.running)
-  const { user, signOut } = useAuth()
+  const { user, guest, signOut } = useAuth()
   const { go } = useNavigation()
 
   useEffect(() => {
@@ -87,7 +87,12 @@ export default function Header() {
         return
       }
       if (!user || projectOwnerId !== user.id) {
-        store.addLog('You can only save to projects you own', 'warning')
+        store.addLog(
+          guest
+            ? 'Guest mode autosaves on this machine — use "Export as .brain" to keep a copy'
+            : 'You can only save to projects you own',
+          'warning',
+        )
         return
       }
       try {

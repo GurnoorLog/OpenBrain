@@ -4,8 +4,21 @@ import { AuthContext } from './authContext'
 import type { AuthContextValue, AuthResult } from './authContext'
 import { supabase } from './supabase'
 
+// Guest sessions never touch Supabase: the flag lives in localStorage and all
+// guest data is persisted on the machine (localStorage / the local Runtime).
+const GUEST_STORAGE_KEY = 'openbrain:guest'
+
+function readGuestFlag(): boolean {
+  try {
+    return localStorage.getItem(GUEST_STORAGE_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+
 export function AuthProvider({ children }: { readonly children: ReactNode }) {
   const [user, setUser] = useState<AuthContextValue['user']>(null)
+  const [guest, setGuest] = useState<boolean>(readGuestFlag)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -60,21 +73,38 @@ export function AuthProvider({ children }: { readonly children: ReactNode }) {
     return { error: error?.message ?? null, needsEmailConfirmation: false }
   }, [])
 
+  const signInAsGuest = useCallback((): void => {
+    setGuest(true)
+    try {
+      localStorage.setItem(GUEST_STORAGE_KEY, '1')
+    } catch {
+      /* ignore */
+    }
+  }, [])
+
   const signOut = useCallback(async (): Promise<void> => {
+    setGuest(false)
+    try {
+      localStorage.removeItem(GUEST_STORAGE_KEY)
+    } catch {
+      /* ignore */
+    }
     await supabase?.auth.signOut()
   }, [])
 
   const value = useMemo<AuthContextValue>(
     () => ({
       user,
+      guest,
       loading,
       configured: supabase !== null,
       signInWithEmail,
       signUpWithEmail,
       signInWithGoogle,
+      signInAsGuest,
       signOut,
     }),
-    [user, loading, signInWithEmail, signUpWithEmail, signInWithGoogle, signOut],
+    [user, guest, loading, signInWithEmail, signUpWithEmail, signInWithGoogle, signInAsGuest, signOut],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

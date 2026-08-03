@@ -9,16 +9,17 @@ import DashboardPage from './pages/DashboardPage'
 import StudioApp from './pages/StudioApp'
 
 function Root() {
-  const { user, loading } = useAuth()
+  const { user, guest, loading } = useAuth()
   const [view, setView] = useState<AppView>('landing')
   const [authMode, setAuthMode] = useState<AuthMode>('login')
+  const signedIn = user !== null || guest
 
   // First-time visitors without a session land on the marketing page. Once a
-  // session exists (including on refresh with a persisted session) go to the
-  // project dashboard.
+  // session exists (including on refresh with a persisted session or a guest
+  // flag) go to the project dashboard.
   useEffect(() => {
-    if (user && view === 'landing') setView('dashboard')
-  }, [user, view])
+    if (signedIn && view === 'landing') setView('dashboard')
+  }, [signedIn, view])
 
   if (loading) {
     return (
@@ -38,9 +39,9 @@ function Root() {
   }
 
   const content =
-    user && view === 'studio' ? (
+    signedIn && view === 'studio' ? (
       <StudioApp />
-    ) : user && view === 'dashboard' ? (
+    ) : signedIn && view === 'dashboard' ? (
       <DashboardPage />
     ) : view === 'auth' ? (
       <AuthPage />

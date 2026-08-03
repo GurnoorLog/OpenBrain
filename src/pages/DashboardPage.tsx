@@ -4,12 +4,18 @@ import { useNavigation } from '../core/navigation'
 import { useBrainStore } from '../store/useBrainStore'
 import ProviderPill from '../components/ProviderPill'
 import {
-  buildProjectData,
+  listProjects,
   createProject,
   deleteProject,
-  listProjects,
   listSharedProjects,
+  buildProjectData,
 } from '../core/projects/projectsRepository'
+import {
+  listGuestProjects,
+  saveGuestProject,
+  deleteGuestProject,
+} from '../core/projects/guestProjectsRepository'
+import type { GuestProject } from '../core/projects/guestProjectsRepository'
 import type { BrainProject } from '../core/projects/projectsRepository'
 import './dashboard.css'
 
@@ -95,11 +101,12 @@ function ProjectThumb({ project }: { readonly project: BrainProject }) {
 }
 
 export default function DashboardPage() {
-  const { user, signOut } = useAuth()
+  const { user, guest, signOut } = useAuth()
   const { go } = useNavigation()
   const [tab, setTab] = useState<'mine' | 'shared'>('mine')
   const [query, setQuery] = useState('')
   const [projects, setProjects] = useState<BrainProject[]>([])
+  const [guestProjects, setGuestProjects] = useState<GuestProject[]>([])
   const [loading, setLoading] = useState(true)
   const [prompt, setPrompt] = useState('')
   const [busy, setBusy] = useState(false)
@@ -113,8 +120,12 @@ export default function DashboardPage() {
     setLoading(true)
     setError(null)
     try {
-      const rows = tab === 'shared' ? await listSharedProjects() : await listProjects(user?.id ?? '')
-      if (refreshSeq.current === seq) setProjects(rows)
+      if (guest) {
+        setGuestProjects(listGuestProjects())
+      } else {
+        const rows = tab === 'shared' ? await listSharedProjects() : await listProjects(user?.id ?? '')
+        if (refreshSeq.current === seq) setProjects(rows)
+      }
     } catch (e) {
       if (refreshSeq.current === seq) {
         setError(e instanceof Error ? e.message : 'Failed to load projects')
@@ -122,19 +133,38 @@ export default function DashboardPage() {
     } finally {
       if (refreshSeq.current === seq) setLoading(false)
     }
-  }, [tab, user?.id])
+  }, [tab, user?.id, guest])
 
   useEffect(() => {
     void refresh()
   }, [refresh])
 
+  // Guests get a local project list (the same grid, backed by localStorage).
+  const guestRows = useMemo<BrainProject[]>(
+    () =>
+      guestProjects.map((p) => ({
+        id: p.id,
+        user_id: 'guest',
+        name: p.name,
+        description: p.description,
+        thumbnail_url: null,
+        is_shared: false,
+        data: { prompt: p.data?.prompt, brain: p.data?.brain },
+        created_at: p.updatedAt,
+        updated_at: p.updatedAt,
+      })),
+    [guestProjects],
+  )
+
+  const rows = guest ? guestRows : projects
+
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
-    if (!q) return projects
-    return projects.filter(
+    if (!q) return rows
+    return rows.filter(
       (p) => p.name.toLowerCase().includes(q) || (p.description ?? '').toLowerCase().includes(q),
     )
-  }, [projects, query])
+  }, [rows, query])
 
   const groups = useMemo(() => groupByRecency(filtered), [filtered])
 
@@ -158,11 +188,25 @@ export default function DashboardPage() {
   const createFromPrompt = useCallback(
     async (raw?: string) => {
       const text = (raw ?? prompt).trim()
-      if (!text || busy || !user) return
+      if (!text || busy || (!user && !guest)) return
       setBusy(true)
       setError(null)
       setNotice(null)
       try {
+        if (guest) {
+          const project = saveGuestProject({
+            name: titleFromPrompt(text),
+            description: text,
+            data: buildProjectData(text, [], []),
+          })
+          const store = useBrainStore.getState()
+          store.setBrain({ nodes: [], connections: [] })
+          store.setProject({ id: project.id, name: project.name, prompt: text, ownerId: 'guest' })
+          setGuestProjects(listGuestProjects())
+          go('studio')
+          return
+        }
+        if (!user) return
         const project = await createProject(user.id, {
           name: titleFromPrompt(text),
           description: text,
@@ -185,13 +229,18 @@ export default function DashboardPage() {
         setBusy(false)
       }
     },
-    [busy, go, prompt, user],
+    [busy, go, prompt, user, guest],
   )
 
   const removeProject = useCallback(
     async (project: BrainProject) => {
-      if (!user) return
       if (!window.confirm(`Delete "${project.name}"?`)) return
+      if (guest) {
+        deleteGuestProject(project.id)
+        setGuestProjects(listGuestProjects())
+        return
+      }
+      if (!user) return
       try {
         await deleteProject(user.id, project.id)
         setProjects((prev) => prev.filter((p) => p.id !== project.id))
@@ -199,7 +248,7 @@ export default function DashboardPage() {
         setNotice(e instanceof Error ? e.message : 'Failed to delete project')
       }
     },
-    [user],
+    [user, guest],
   )
 
   const onTabChange = (next: 'mine' | 'shared') => {
@@ -230,10 +279,14 @@ export default function DashboardPage() {
 
         <div className="flex gap-1 p-3 shrink-0">
           {(
-            [
-              { id: 'mine', label: 'My Projects', icon: 'lucide:layout-grid' },
-              { id: 'shared', label: 'Shared', icon: 'lucide:users' },
-            ] as const
+            guest
+              ? [
+                  { id: 'mine' as const, label: 'Local Brains', icon: 'lucide:layout-grid' },
+                ]
+              : [
+                  { id: 'mine' as const, label: 'My Projects', icon: 'lucide:layout-grid' },
+                  { id: 'shared' as const, label: 'Shared', icon: 'lucide:users' },
+                ]
           ).map((item) => (
             <button
               key={item.id}
@@ -361,7 +414,7 @@ export default function DashboardPage() {
             </button>
             <div className="flex items-center gap-3">
               <span className="max-w-[180px] truncate text-xs font-semibold text-white/40">
-                {user?.email}
+                {guest ? 'Guest' : user?.email}
               </span>
               <div className="avatar-ring ml-0">
                 {avatarUrl ? (
@@ -384,8 +437,15 @@ export default function DashboardPage() {
           <div className="max-w-4xl mx-auto px-8 py-10 pb-32">
             {showBanner && (
               <div className="flex items-center gap-3 mb-10 px-4 py-2.5 rounded-full bg-white/[0.04] border border-white/[0.08] text-sm text-white/60">
-                <iconify-icon icon="lucide:sparkles" className="text-teal-400 text-sm"></iconify-icon>
-                <span className="flex-1">OpenBrain developer preview</span>
+                <iconify-icon
+                  icon={guest ? 'lucide:laptop' : 'lucide:sparkles'}
+                  className={`text-sm ${guest ? 'text-teal-400' : 'text-teal-400'}`}
+                ></iconify-icon>
+                <span className="flex-1">
+                  {guest
+                    ? 'Guest mode — brains, memory and files stay on this machine.'
+                    : 'OpenBrain developer preview'}
+                </span>
                 <button
                   onClick={() => setShowBanner(false)}
                   className="text-white/30 hover:text-white transition-colors"
