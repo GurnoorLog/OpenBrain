@@ -1,0 +1,139 @@
+{
+  "format": "openbrain/brain",
+  "version": 1,
+  "id": "372e41cd-ecd1-4657-9db6-1f7f59c575d4",
+  "name": "Build a document-backed market research…",
+  "description": "",
+  "goal": "",
+  "provider": {
+    "providerId": "fireworks",
+    "model": ""
+  },
+  "memory": {
+    "enabled": false,
+    "kind": "working",
+    "scope": "brain"
+  },
+  "knowledge": {
+    "required": false,
+    "sourceTypes": []
+  },
+  "execution": {
+    "mode": "auto"
+  },
+  "graph": {
+    "nodes": [
+      {
+        "id": "memory-read",
+        "type": "memory",
+        "x": 0,
+        "y": 0,
+        "reason": "Provides prior conversation history to the research LLM so later runs build on previous findings.",
+        "configuration": {}
+      },
+      {
+        "id": "browser",
+        "type": "browser",
+        "x": 0,
+        "y": 140,
+        "reason": "Gathers real-time information from the company's official website to extract strategy, metrics, and statements.",
+        "configuration": {
+          "url": "https://www.apple.com/"
+        }
+      },
+      {
+        "id": "rag",
+        "type": "rag",
+        "x": 0,
+        "y": 280,
+        "reason": "Provides internal or external documents (e.g., analyst reports, whitepapers) to complement the live page data.",
+        "configuration": {}
+      },
+      {
+        "id": "research-llm",
+        "type": "llm",
+        "x": 260,
+        "y": 0,
+        "reason": "Core reasoning node that combines all three data sources (browser, rag, memory) and produces a cited analysis.",
+        "configuration": {
+          "instructions": "You are a market research analyst. You will receive three inputs: the content of a live company web page, relevant documents from a knowledge base, and prior conversation history from memory. Extract key facts, quotes, and metrics from both sources. Compare and contrast the information, noting agreements and contradictions. Cite sources for every claim (e.g., 'from live page' or 'from document'). Output a detailed analysis with citations."
+        }
+      },
+      {
+        "id": "memory-write",
+        "type": "memory",
+        "x": 520,
+        "y": 0,
+        "reason": "Stores the findings so that subsequent runs can build on prior context.",
+        "configuration": {}
+      },
+      {
+        "id": "analyst-llm",
+        "type": "llm",
+        "x": 520,
+        "y": 140,
+        "reason": "Transforms the raw analysis into a polished, structured report with sections: Executive Summary, Key Findings, Evidence vs. Gaps, Next Steps.",
+        "configuration": {
+          "instructions": "You are a report writer. You will receive the analysis from the research analyst. Write a structured market research report in Markdown with the following sections: Executive Summary, Key Findings with Citations, Evidence vs. Gaps, and Recommended Next Steps. Ensure all claims are cited from the provided analysis."
+        }
+      },
+      {
+        "id": "output",
+        "type": "output",
+        "x": 780,
+        "y": 0,
+        "reason": "Sink node that presents the final report to the user.",
+        "configuration": {}
+      }
+    ],
+    "connections": [
+      {
+        "id": "b02c2829-0ac4-4e79-bfd9-7d1c9d8308ac",
+        "from": "memory-read",
+        "fromPort": "stored",
+        "to": "research-llm",
+        "toPort": "context"
+      },
+      {
+        "id": "c522fb62-4711-4593-aa7c-2ab9b0a017d8",
+        "from": "browser",
+        "fromPort": "pages",
+        "to": "research-llm",
+        "toPort": "context"
+      },
+      {
+        "id": "415c754c-92c2-42a1-bb5c-7bc4f3dad4d0",
+        "from": "rag",
+        "fromPort": "documents",
+        "to": "research-llm",
+        "toPort": "context"
+      },
+      {
+        "id": "427e70db-4add-4bf1-8102-38b584680c01",
+        "from": "research-llm",
+        "fromPort": "response",
+        "to": "memory-write",
+        "toPort": "value"
+      },
+      {
+        "id": "035b22f1-cfce-4273-b4be-782316276000",
+        "from": "research-llm",
+        "fromPort": "response",
+        "to": "analyst-llm",
+        "toPort": "context"
+      },
+      {
+        "id": "2691610c-db81-493e-a379-82f7949e022c",
+        "from": "analyst-llm",
+        "fromPort": "response",
+        "to": "output",
+        "toPort": "result"
+      }
+    ]
+  },
+  "dependencies": [],
+  "metadata": {
+    "exportedAt": "2026-08-03T12:48:23.106Z",
+    "appVersion": "desktop"
+  }
+}

@@ -47,12 +47,21 @@ export function exportBrain(): void {
 // Downloads the current brain as a first-class .brain project file.
 export function exportBrainFile(): void {
   const store = useBrainStore.getState()
+  const agent = store.agentSchedule.enabled
+    ? {
+        enabled: true,
+        schedule: {
+          cron: store.agentSchedule.cron,
+          timezone: store.agentSchedule.timezone,
+        },
+      }
+    : undefined
   const file = buildBrainFile(
     {
       nodes: serializeBrain().nodes,
       connections: serializeBrain().connections,
     },
-    { name: store.projectName ?? undefined },
+    { name: store.projectName ?? undefined, agent },
   )
   const blob = new Blob([JSON.stringify(file, null, 2)], {
     type: 'application/vnd.openbrain.brain+json',
@@ -97,6 +106,13 @@ export function applyBrainFile(file: BrainFile): void {
     connections: [...file.graph.connections],
   })
   if (file.name) useBrainStore.getState().setBrainTitle(file.name)
+  if (file.agent) {
+    useBrainStore.getState().setAgentSchedule({
+      enabled: file.agent.enabled,
+      cron: file.agent.schedule.cron,
+      timezone: file.agent.schedule.timezone ?? 'UTC',
+    })
+  }
 }
 
 // Copies a full shareable URL (#brain=...) to the clipboard. Anyone opening

@@ -120,6 +120,11 @@ export interface BrainStore {
   projectPrompt: string | null
   projectOwnerId: string | null
   brainTitle: string
+  agentSchedule: {
+    enabled: boolean
+    cron: string
+    timezone: string
+  }
   thinking: string
   lastReasoning: string
   generationError: string | null
@@ -136,6 +141,7 @@ export interface BrainStore {
     ownerId?: string | null
   }) => void
   setBrainTitle: (title: string) => void
+  setAgentSchedule: (schedule: { enabled?: boolean; cron?: string; timezone?: string }) => void
   setThinking: (text: string) => void
   setLastReasoning: (text: string) => void
   setGenerationError: (error: string | null) => void
@@ -206,6 +212,7 @@ export const useBrainStore = create<BrainStore>((set, get) => ({
   projectPrompt: null,
   projectOwnerId: null,
   brainTitle: '',
+  agentSchedule: { enabled: false, cron: '0 9 * * *', timezone: 'UTC' },
   thinking: '',
   lastReasoning: '',
   generationError: null,
@@ -223,6 +230,10 @@ export const useBrainStore = create<BrainStore>((set, get) => ({
       projectOwnerId: meta.id ? (meta.ownerId ?? null) : null,
     }),
   setBrainTitle: (brainTitle) => set({ brainTitle }),
+  setAgentSchedule: (schedule) =>
+    set((state) => ({
+      agentSchedule: { ...state.agentSchedule, ...schedule },
+    })),
   setThinking: (thinking) => set({ thinking }),
   setLastReasoning: (lastReasoning) => set({ lastReasoning }),
   setGenerationError: (generationError) => set({ generationError }),

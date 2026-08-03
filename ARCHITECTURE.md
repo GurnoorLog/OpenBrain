@@ -27,7 +27,11 @@ the browser, in Docker, or in the cloud.
 - **Ollama** for local models (no API key), **Fireworks** optional for cloud LLM.
 - `/local/files` gives tool nodes safe, scoped access to the mounted
   `WORKSPACE` (path-escaping enforced) — no remote server sees user files.
-- `/local/finetune` stages fine-tune jobs into the workspace.
+- `/local/finetune` runs real local LoRA/QLoRA fine-tunes. The trainer
+  (`runtime/train_local.py`) probes the machine it runs on (CUDA/VRAM/libs)
+  and adapts: it picks a base model that fits the detected VRAM, builds a
+  dataset from the goal, trains, and saves a PeFT adapter into the workspace.
+  Jobs stream live progress and are pollable via `GET /local/finetune/<jobId>`.
 - `.brain` files are checked into git like source code.
 
 ## AI Providers

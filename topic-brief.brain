@@ -1,0 +1,111 @@
+{
+  "format": "openbrain/brain",
+  "version": 1,
+  "id": "eb235286-7797-4d7e-8a5b-1da80b5781af",
+  "name": "Topic Brief",
+  "description": "Turns a topic into a structured briefing: plans research angles, delegates web research, fact-checks with the autoreview skill, and assembles the final report.",
+  "goal": "Given a topic, produce a structured briefing with a TL;DR, key findings, open questions, and sources.",
+  "provider": {
+    "providerId": "fireworks",
+    "model": ""
+  },
+  "memory": {
+    "enabled": false,
+    "kind": "working",
+    "scope": "brain"
+  },
+  "knowledge": {
+    "required": false,
+    "sourceTypes": []
+  },
+  "execution": {
+    "mode": "auto"
+  },
+  "graph": {
+    "nodes": [
+      {
+        "id": "planner",
+        "type": "llm",
+        "x": 0,
+        "y": 0,
+        "reason": "First step: decompose the topic into focused research directions.",
+        "configuration": {
+          "instructions": "You are a research planner. Given a user's topic, break it into exactly 3 distinct research angles. Output each angle as a concise phrase on a separate line. Do not include any other text."
+        }
+      },
+      {
+        "id": "research",
+        "type": "worker",
+        "x": 260,
+        "y": 0,
+        "reason": "Delegates web research to the saved Research Brain, one angle per run.",
+        "configuration": {
+          "brain": "Research Brain"
+        }
+      },
+      {
+        "id": "review",
+        "type": "worker",
+        "x": 520,
+        "y": 0,
+        "reason": "Fact-checks and tightens the draft using the curated autoreview skill.",
+        "configuration": {
+          "brain": "autoreview"
+        }
+      },
+      {
+        "id": "writer",
+        "type": "llm",
+        "x": 780,
+        "y": 0,
+        "reason": "Synthesizes the reviewed content into a structured briefing.",
+        "configuration": {
+          "instructions": "You are a briefing writer. Assemble a final briefing with the following sections: TL;DR, Key Findings, Open Questions, Sources. Use the reviewed draft as input. Output in markdown."
+        }
+      },
+      {
+        "id": "output",
+        "type": "output",
+        "x": 1040,
+        "y": 0,
+        "reason": "Final sink to present the result to the user.",
+        "configuration": {}
+      }
+    ],
+    "connections": [
+      {
+        "id": "d6eac315-5470-496e-8538-5f500d83a7d1",
+        "from": "planner",
+        "fromPort": "response",
+        "to": "research",
+        "toPort": "input"
+      },
+      {
+        "id": "3fe2ac74-4024-47ec-b524-cbb781b3b1dc",
+        "from": "research",
+        "fromPort": "result",
+        "to": "review",
+        "toPort": "input"
+      },
+      {
+        "id": "c0413310-b8f3-43c3-9cce-0bca6616d406",
+        "from": "review",
+        "fromPort": "result",
+        "to": "writer",
+        "toPort": "context"
+      },
+      {
+        "id": "45f86479-8b6e-491b-97ef-3e78c2c9395f",
+        "from": "writer",
+        "fromPort": "response",
+        "to": "output",
+        "toPort": "result"
+      }
+    ]
+  },
+  "dependencies": [],
+  "metadata": {
+    "exportedAt": "2026-08-03T14:24:12.326Z",
+    "appVersion": "desktop"
+  }
+}

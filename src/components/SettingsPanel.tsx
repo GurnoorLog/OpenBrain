@@ -5,6 +5,7 @@ import { getActiveProviderId, isFireworksApiKeyConfigured, listProviderHealth, g
 import { isHfTokenConfigured } from './canvas/finetuneAdapter'
 import { TOOLS } from '../core/tools/toolRegistry'
 import { FIREWORKS_MODELS } from '../core/providers/fireworksModels'
+import { useBrainStore } from '../store/useBrainStore'
 import type { ProviderOverview } from './canvas/architectAdapter'
 
 const STATUS_LABEL: Readonly<Record<ProviderStatus, string>> = {
@@ -36,6 +37,8 @@ export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
   const [fireworksKeySet, setFireworksKeySet] = useState(false)
   const [hfTokenSet, setHfTokenSet] = useState(false)
   const [selectedModel, setSelectedModel] = useState<string>(() => getSelectedFireworksModel() ?? FIREWORKS_MODELS[0].id)
+  const agent = useBrainStore((state) => state.agentSchedule)
+  const setAgentSchedule = useBrainStore((state) => state.setAgentSchedule)
 
   useEffect(() => {
     if (!open) return
@@ -154,6 +157,54 @@ export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
                 </button>
               )
             })}
+          </div>
+        </div>
+
+        <div className="mb-4">
+          <div className="text-[10px] uppercase tracking-widest text-gray-500 font-bold mb-1.5">
+            Agent schedule
+          </div>
+          <div className="rounded-lg bg-white/5 border border-white/10 p-3 flex flex-col gap-2.5">
+            <label className="flex items-center justify-between cursor-pointer">
+              <span className="text-sm text-gray-200 font-medium">Scheduled agent</span>
+              <input
+                type="checkbox"
+                checked={agent.enabled}
+                onChange={(event) => setAgentSchedule({ enabled: event.target.checked })}
+                className="w-4 h-4 accent-teal-400"
+              />
+            </label>
+            {agent.enabled ? (
+              <>
+                <label className="flex flex-col gap-1">
+                  <span className="text-[10px] uppercase tracking-widest text-gray-500 font-bold">
+                    Cron (minute hour day-of-month month day-of-week)
+                  </span>
+                  <input
+                    value={agent.cron}
+                    onChange={(event) => setAgentSchedule({ cron: event.target.value })}
+                    placeholder="0 9 * * *"
+                    className="bg-black/30 border border-white/10 rounded-md px-2.5 py-1.5 text-sm text-gray-100 font-mono outline-none focus:border-teal-400/50"
+                  />
+                </label>
+                <label className="flex flex-col gap-1">
+                  <span className="text-[10px] uppercase tracking-widest text-gray-500 font-bold">
+                    Timezone (IANA)
+                  </span>
+                  <input
+                    value={agent.timezone}
+                    onChange={(event) => setAgentSchedule({ timezone: event.target.value })}
+                    placeholder="UTC"
+                    className="bg-black/30 border border-white/10 rounded-md px-2.5 py-1.5 text-sm text-gray-100 font-mono outline-none focus:border-teal-400/50"
+                  />
+                </label>
+                <p className="text-[11px] text-gray-500 leading-snug">
+                  The Runtime's agent daemon runs this brain on the schedule once it's saved as a
+                  .brain file in the local registry (see the Runtime /agents API and
+                  <code className="text-teal-300/80"> brain agents</code>).
+                </p>
+              </>
+            ) : null}
           </div>
         </div>
 

@@ -263,6 +263,13 @@ export async function generateFromPrompt(
     const spec = toLegacyBrainSpec(brain)
     await revealBrainDesign(spec, specification.nodes, signal)
     store.setBrainTitle(deriveTitle(prompt))
+    if (specification.agent) {
+      store.setAgentSchedule({
+        enabled: specification.agent.enabled,
+        cron: specification.agent.schedule.cron,
+        timezone: specification.agent.schedule.timezone ?? 'UTC',
+      })
+    }
     if (reasoningBuffer.trim()) {
       const clipped = clipReasoning(reasoningBuffer.trim())
       store.setLastReasoning(clipped)

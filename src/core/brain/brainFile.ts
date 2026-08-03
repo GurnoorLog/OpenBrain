@@ -33,6 +33,18 @@ export interface BrainFileExecution {
   readonly maxRetries?: number
 }
 
+// Optional "agent" block that turns a brain into an autonomous scheduled
+// agent. When agent.enabled is true, the Runtime's agent daemon runs the brain
+// on the cron schedule and surfaces its runs via GET /agents. Standard
+// 5-field cron: minute hour day-of-month month day-of-week.
+export interface BrainFileAgent {
+  readonly enabled: boolean
+  readonly schedule: {
+    readonly cron: string
+    readonly timezone?: string
+  }
+}
+
 export interface BrainFile {
   readonly format: typeof BRAIN_FILE_MAGIC
   readonly version: typeof BRAIN_FILE_VERSION
@@ -47,6 +59,7 @@ export interface BrainFile {
   readonly memory: BrainFileMemory
   readonly knowledge: BrainFileKnowledge
   readonly execution: BrainFileExecution
+  readonly agent?: BrainFileAgent
   readonly graph: BrainFileGraph
   readonly dependencies: readonly string[]
   readonly metadata: {
@@ -64,6 +77,7 @@ export interface BrainFileSource {
   readonly providerId?: string
   readonly model?: string
   readonly executionMode?: 'manual' | 'auto'
+  readonly agent?: BrainFileAgent
 }
 
 // Serializes the current store graph into the .brain file shape. Pure — no
@@ -88,6 +102,7 @@ export function buildBrainFile(
     memory: { enabled: false, kind: 'working', scope: 'brain' },
     knowledge: { required: false, sourceTypes: [] },
     execution: { mode: source.executionMode ?? 'auto' },
+    ...(source.agent ? { agent: source.agent } : {}),
     graph: {
       nodes: graph.nodes.map((node) => ({ ...node })),
       connections: graph.connections.map((connection) => ({ ...connection })),

@@ -49,6 +49,13 @@ export interface BrainSpecification {
   readonly memoryRecommendation?: MemoryRecommendation
   readonly knowledgeRecommendation?: KnowledgeRecommendation
   readonly executionMode: ExecutionMode
+  readonly agent?: {
+    readonly enabled: boolean
+    readonly schedule: {
+      readonly cron: string
+      readonly timezone?: string
+    }
+  }
   readonly nodes: readonly SpecificationNode[]
   readonly edges: readonly SpecificationEdge[]
   readonly reasoning: string

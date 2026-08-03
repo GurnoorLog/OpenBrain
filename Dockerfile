@@ -40,15 +40,24 @@ ENV NODE_ENV=production \
     REGISTRY_DIR=/workspace/.registry \
     PLUGINS_DIR=/app/plugins
 
-# Runtime server (also serves the built SPA) + shared graph executor.
+# Runtime server (also serves the built SPA) + shared graph executor + native
+# MCP client + the agent scheduler. The runtime has its own dependency set
+# (@modelcontextprotocol/sdk).
 COPY runtime/package.json ./package.json
+RUN npm install --no-audit --no-fund --omit=dev
 COPY runtime/server.js ./server.js
+COPY runtime/agent-daemon.js ./agent-daemon.js
+COPY runtime/train-local.js ./train-local.js
+COPY runtime/train_local.py ./train_local.py
 COPY cloud-executor/brain-core.js ./brain-core.js
+COPY cloud-executor/mcp-client.js ./mcp-client.js
+COPY mcp.json ./mcp.json
 
-# SDK, CLI, plugin host.
+# SDK, CLI, plugin host, curated skills (sub-brain library for worker nodes).
 COPY sdk ./sdk
 COPY cli ./cli
 COPY plugins ./plugins
+COPY skills ./skills
 
 # Built SPA from stage 1.
 COPY --from=build /app/dist ./dist

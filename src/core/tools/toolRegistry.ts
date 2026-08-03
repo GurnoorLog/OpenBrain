@@ -165,39 +165,62 @@ function findUserMessage(nodes: Readonly<Array<{ readonly configuration?: Readon
 }
 
 // ---------------------------------------------------------------------------
-// Composio-backed tools (GitHub + generic MCP). One API key drives every
-// Composio tool call; a connected account (created once in the Composio
-// dashboard) authenticates the underlying app. For a hackathon demo the key is
-// bundled via VITE_COMPOSIO_API_KEY so end users never configure anything.
+// Native MCP tools (GitHub + generic MCP). A browser can't run an MCP client,
+// so tool nodes call the backend's POST /mcp/call endpoint (the cloud executor
+// or the local runtime). The browser only sends { mcpServer, tool, arguments };
+// any tokens stay server-side, resolved from the server's mcp.json + env via
+// {env:...} interpolation — never shipped to the browser.
 // ---------------------------------------------------------------------------
-const COMPOSIO_API_URL = 'https://backend.composio.dev/api/v3.1'
-const COMPOSIO_KEY_STORAGE = `${KEY_PREFIX}composio`
-const COMPOSIO_ACCOUNT_STORAGE = `${KEY_PREFIX}composio-account`
 
-export function getComposioApiKey(): string | null {
-  const local = getToolKey('composio')
-  if (local && local.trim() !== '') return local.trim()
-  const env = import.meta.env.VITE_COMPOSIO_API_KEY as string | undefined
-  return env && env.trim() !== '' ? env.trim() : null
+interface McpEndpointResponse {
+  ok?: boolean
+  data?: unknown
+  error?: string
 }
 
-export function getComposioAccountId(): string | null {
-  try {
-    const local = localStorage.getItem(COMPOSIO_ACCOUNT_STORAGE)
-    if (local && local.trim() !== '') return local.trim()
-  } catch {
-    /* ignore */
-  }
-  const env = import.meta.env.VITE_COMPOSIO_ACCOUNT_ID as string | undefined
-  return env && env.trim() !== '' ? env.trim() : null
+// Prefer the cloud executor (Render), then the local runtime, then the default
+// runtime URL — the runtime container serves the SPA and its own /mcp/call.
+function mcpEndpointBase(): string {
+  const cloud = import.meta.env.VITE_CLOUD_EXECUTOR_URL as string | undefined
+  if (cloud && cloud.trim() !== '') return cloud.trim()
+  const runtime = import.meta.env.VITE_RUNTIME_URL as string | undefined
+  if (runtime && runtime.trim() !== '') return runtime.trim()
+  return 'http://localhost:8080'
 }
 
-export function setComposioAccountId(value: string): void {
+async function callNativeMcp(
+  server: string,
+  tool: string,
+  args: Record<string, unknown>,
+  signal: AbortSignal,
+): Promise<unknown> {
+  const baseUrl = mcpEndpointBase()
+  const response = await fetch(`${baseUrl.replace(/\/+$/, '')}/mcp/call`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ mcpServer: server, tool, arguments: args }),
+    signal,
+  })
+  const text = await response.text().catch(() => '')
+  let parsed: McpEndpointResponse | null = null
   try {
-    localStorage.setItem(COMPOSIO_ACCOUNT_STORAGE, value.trim())
+    parsed = JSON.parse(text) as McpEndpointResponse
   } catch {
-    /* ignore */
+    parsed = null
   }
+  if (!response.ok || parsed?.ok === false) {
+    throw new Error(parsed?.error ?? `MCP call returned HTTP ${response.status}`)
+  }
+  return parsed?.data
+}
+
+// A node's configuration.tool may be "server/tool" (or "server.tool"); the
+// server itself is configuration.mcpServer. Returns just the tool name.
+function bareTool(configurationTool: string): string {
+  const slash = configurationTool.lastIndexOf('/')
+  const dot = configurationTool.lastIndexOf('.')
+  const separator = Math.max(slash, dot)
+  return separator > 0 ? configurationTool.slice(separator + 1) : configurationTool
 }
 
 // Reads a field the architect stamped onto the node's configuration (e.g.
@@ -239,88 +262,6 @@ function mergeInputArgs(inputs: NodeInputs, args: Record<string, unknown>): Reco
   return merged
 }
 
-// POST /api/v3.1/tools/execute/{tool_slug}. Passing version "latest" avoids the
-// ToolVersionRequiredError the API raises for direct execution. Without a
-// connected_account_id Composio falls back to the project's default account.
-//
-// Composio's CORS preflight drops Access-Control-Allow-Origin, so browsers
-// can't call it directly — the request is routed through the Render cloud
-// executor's /composio proxy (wide-open CORS, server-side fetch). When no
-// proxy is configured the direct call is kept as a fallback (local dev / tests).
-async function composioExecute(
-  slug: string,
-  args: Record<string, unknown>,
-  apiKey: string,
-  signal: AbortSignal,
-): Promise<unknown> {
-  const body: Record<string, unknown> = { arguments: args, version: 'latest' }
-  const accountId = getComposioAccountId()
-  if (accountId) {
-    body.connected_account_id = accountId
-    // GitHub (and other auth toolkits) need the owning user id alongside the
-    // connected account to identify it during execution.
-    const entityId = import.meta.env.VITE_COMPOSIO_ENTITY_ID as string | undefined
-    if (entityId && entityId.trim() !== '') body.entity_id = entityId
-  }
-
-  const baseUrl = import.meta.env.VITE_CLOUD_EXECUTOR_URL as string | undefined
-  if (baseUrl) {
-    const proxyBody: Record<string, unknown> = { slug, arguments: args, ...body }
-    if (apiKey) proxyBody.apiKey = apiKey
-    const response = await fetch(`${baseUrl.replace(/\/$/, '')}/composio`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(proxyBody),
-      signal,
-    })
-    const text = await response.text().catch(() => '')
-    let parsed: { ok?: boolean; data?: unknown; error?: string } | null = null
-    try {
-      parsed = JSON.parse(text) as { ok?: boolean; data?: unknown; error?: string } | null
-    } catch {
-      parsed = null
-    }
-    if (!response.ok || parsed?.ok === false) {
-      throw new Error(parsed?.error ?? `Composio proxy returned HTTP ${response.status}`)
-    }
-    return parsed?.data
-  }
-
-  const response = await fetch(`${COMPOSIO_API_URL}/tools/execute/${encodeURIComponent(slug)}`, {
-    method: 'POST',
-    headers: { 'x-api-key': apiKey, 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-    signal,
-  })
-  const raw = await response.text().catch(() => '')
-  if (!response.ok) {
-    let detail = `HTTP ${response.status}`
-    try {
-      const parsed = JSON.parse(raw) as { error?: { message?: string } }
-      if (parsed?.error?.message) detail = `${detail}: ${parsed.error.message}`
-    } catch {
-      if (raw.trim() !== '') detail = `${detail}: ${raw.slice(0, 200)}`
-    }
-    throw new Error(`Composio request failed (${detail})`)
-  }
-  let parsed: { data?: unknown; error?: unknown; successful?: boolean } | null = null
-  try {
-    parsed = JSON.parse(raw) as { data?: unknown; error?: unknown; successful?: boolean }
-  } catch {
-    throw new Error(`Composio returned an invalid response: ${raw.slice(0, 120)}`)
-  }
-  if (parsed.successful === false) {
-    throw new Error(
-      typeof parsed.error === 'string' && parsed.error !== ''
-        ? `Composio tool failed: ${parsed.error}`
-        : 'Composio tool execution failed.',
-    )
-  }
-  const data = parsed.data as { response_data?: unknown } | undefined
-  if (data && typeof data === 'object' && 'response_data' in data) return data.response_data
-  return parsed.data
-}
-
 function stringifyResult(data: unknown): string {
   if (data === null || data === undefined) return ''
   if (typeof data === 'string') return data
@@ -346,23 +287,17 @@ function listOfStrings(data: unknown): string[] {
   })
 }
 
-const COMPOSIO_KEY_INSTRUCTIONS = [
-  'This tool runs on the bundled Composio API key — no setup needed for a normal run.',
-  'To use your own key instead: create one at https://app.composio.dev (Settings → API Keys) and paste it here; it is stored only in your browser.',
-  'For GitHub actions, connect the GitHub account once at https://app.composio.dev/connections and add its Connected Account ID (ca_…) in Settings under this tool.',
-]
-
 export const GITHUB_TOOL: ToolDefinition = {
   id: 'github',
   nodeType: 'github',
   name: 'GitHub',
-  description: 'Run a real GitHub operation via Composio (repos, issues, PRs, search)',
+  description: 'Run a real GitHub operation via the native GitHub MCP server (repos, issues, PRs, search)',
   icon: 'lucide:github',
   accent: '#94a3b8',
-  needsKey: true,
-  keyStorageKey: COMPOSIO_KEY_STORAGE,
-  keyEnvHint: 'VITE_COMPOSIO_API_KEY',
-  keyInstructions: COMPOSIO_KEY_INSTRUCTIONS,
+  needsKey: false,
+  keyStorageKey: '',
+  keyEnvHint: '',
+  keyInstructions: [],
   inputs: [
     { id: 'owner', label: 'Owner', kind: 'text' },
     { id: 'repo', label: 'Repo', kind: 'text' },
@@ -371,22 +306,23 @@ export const GITHUB_TOOL: ToolDefinition = {
     { id: 'repos', label: 'Repos', kind: 'list' },
     { id: 'result', label: 'Result', kind: 'text' },
   ],
-  async execute(inputs, context, apiKey) {
-    const key = apiKey ?? getComposioApiKey()
-    if (!key) throw new Error('GitHub tool needs a Composio API key. Add it when prompted, then run again.')
+  async execute(inputs, context) {
+    const server = String(nodeConfigValue(context, 'mcpServer') ?? '').trim() || 'github'
     const configured = String(nodeConfigValue(context, 'tool') ?? '').trim()
-    const toolSlug =
-      configured !== ''
-        ? configured
-        : 'GITHUB_LIST_REPOSITORIES_FOR_THE_AUTHENTICATED_USER'
+    const tool = configured !== '' ? bareTool(configured) : 'list_repositories'
     const args = mergeInputArgs(inputs, parseArguments(nodeConfigValue(context, 'arguments')))
-    context.log(`GitHub tool: executing ${toolSlug}…`, { nodeId: context.currentNodeId })
-    const data = await composioExecute(toolSlug, args, key, context.signal)
-    context.log(`GitHub tool: ${toolSlug} completed.`, {
+    context.log(`GitHub tool: calling ${server}/${tool}…`, { nodeId: context.currentNodeId })
+    const data = await callNativeMcp(server, tool, args, context.signal)
+    context.log(`GitHub tool: ${server}/${tool} completed.`, {
       level: 'success',
       nodeId: context.currentNodeId,
     })
-    return { repos: listOfStrings(data), result: stringifyResult(data) }
+    const entry = data && typeof data === 'object' ? (data as { data?: unknown; result?: unknown }) : {}
+    return {
+      repos: listOfStrings(entry.data),
+      result:
+        typeof entry.result === 'string' ? entry.result : stringifyResult(entry.data ?? data),
+    }
   },
 }
 
@@ -394,37 +330,39 @@ export const MCP_TOOL: ToolDefinition = {
   id: 'mcp',
   nodeType: 'mcp',
   name: 'MCP Tools',
-  description: 'Execute any Composio tool by slug (Slack, Notion, Gmail, Hacker News, Wikipedia, …)',
+  description: 'Call a real tool on a configured MCP server (Stripe, Supabase, filesystem, …)',
   icon: 'lucide:plug-zap',
   accent: '#22d3ee',
-  needsKey: true,
-  keyStorageKey: COMPOSIO_KEY_STORAGE,
-  keyEnvHint: 'VITE_COMPOSIO_API_KEY',
-  keyInstructions: COMPOSIO_KEY_INSTRUCTIONS,
+  needsKey: false,
+  keyStorageKey: '',
+  keyEnvHint: '',
+  keyInstructions: [],
   inputs: [{ id: 'input', label: 'Input', kind: 'any' }],
   outputs: [
     { id: 'result', label: 'Result', kind: 'any' },
     { id: 'data', label: 'Data', kind: 'text' },
   ],
-  async execute(inputs, context, apiKey) {
-    const key = apiKey ?? getComposioApiKey()
-    if (!key) throw new Error('MCP tool needs a Composio API key. Add it when prompted, then run again.')
-    const configured = String(nodeConfigValue(context, 'tool') ?? '').trim()
-    const toolSlug = configured !== '' ? configured : 'HACKERNEWS_GET_TOP_STORIES'
-    const args = mergeInputArgs(inputs, parseArguments(nodeConfigValue(context, 'arguments')))
-    if (configured === '') {
-      context.log(
-        'MCP tool: no configuration.tool set — defaulting to HACKERNEWS_GET_TOP_STORIES (no auth needed).',
-        { nodeId: context.currentNodeId },
-      )
+  async execute(inputs, context) {
+    const server = String(nodeConfigValue(context, 'mcpServer') ?? '').trim()
+    if (server === '') {
+      throw new Error('MCP tool needs configuration.mcpServer — pick a server on the node.')
     }
-    context.log(`MCP tool: executing ${toolSlug}…`, { nodeId: context.currentNodeId })
-    const data = await composioExecute(toolSlug, args, key, context.signal)
-    context.log(`MCP tool: ${toolSlug} completed.`, {
+    const configured = String(nodeConfigValue(context, 'tool') ?? '').trim()
+    if (configured === '') {
+      throw new Error('MCP tool needs configuration.tool — e.g. "server/tool_name".')
+    }
+    const tool = bareTool(configured)
+    const args = mergeInputArgs(inputs, parseArguments(nodeConfigValue(context, 'arguments')))
+    context.log(`MCP tool: calling ${server}/${tool}…`, { nodeId: context.currentNodeId })
+    const data = await callNativeMcp(server, tool, args, context.signal)
+    context.log(`MCP tool: ${server}/${tool} completed.`, {
       level: 'success',
       nodeId: context.currentNodeId,
     })
-    const result = stringifyResult(data)
+    const result =
+      data && typeof data === 'object' && typeof (data as { result?: unknown }).result === 'string'
+        ? (data as { result: string }).result
+        : stringifyResult(data)
     return { result, data: result }
   },
 }

@@ -136,7 +136,14 @@ export abstract class BaseArchitect implements ArchitectProvider {
     try {
       parsed = JSON.parse(candidate)
     } catch {
-      throw new ArchitectParsingError(`Architect provider "${this.id}" returned malformed JSON.`)
+      // The model can exceed its output budget on very large designs and
+      // return truncated JSON. Try to recover a parseable prefix before giving
+      // up so big specs don't hard-fail.
+      const recovered = recoverJson(candidate)
+      if (recovered === null) {
+        throw new ArchitectParsingError(`Architect provider "${this.id}" returned malformed JSON.`)
+      }
+      parsed = recovered
     }
     if (!isBrainSpecification(parsed)) {
       throw new ArchitectParsingError(`Architect provider "${this.id}" returned an invalid specification.`)
@@ -152,4 +159,93 @@ function extractJson(raw: string): string {
   const fence = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/i)
   if (fence) return fence[1].trim()
   return trimmed
+}
+
+// Attempts to recover a parseable JSON value from text that was truncated
+// mid-structure (large designs can outgrow the model's output budget). Handles
+// unclosed arrays/objects, trailing commas, and values cut mid-string. Returns
+// the parsed value or null.
+function recoverJson(raw: string): unknown {
+  const text = raw.trim()
+  if (text === '') return null
+  const start = text.indexOf('{')
+  if (start === -1) return null
+
+  const balance = (segment: string): string => {
+    const stack: string[] = []
+    const inString = { open: false, escape: false }
+    const tokens: string[] = []
+    for (const ch of segment) {
+      if (inString.open) {
+        tokens.push(ch)
+        if (inString.escape) inString.escape = false
+        else if (ch === '\\') inString.escape = true
+        else if (ch === '"') inString.open = false
+        continue
+      }
+      switch (ch) {
+        case '"':
+          inString.open = true
+          tokens.push(ch)
+          break
+        case '{':
+        case '[':
+          stack.push(ch)
+          tokens.push(ch)
+          break
+        case '}':
+          if (stack[stack.length - 1] === '{') stack.pop()
+          tokens.push(ch)
+          break
+        case ']':
+          if (stack[stack.length - 1] === '[') stack.pop()
+          tokens.push(ch)
+          break
+        default:
+          tokens.push(ch)
+      }
+    }
+    // Drop a trailing unterminated string value, then close unclosed brackets.
+    if (inString.open) {
+      const joined = tokens.join('')
+      const lastQuote = joined.lastIndexOf('"')
+      tokens.length = lastQuote === -1 ? 0 : lastQuote
+    }
+    let candidate = tokens.join('')
+    while (stack.length > 0) {
+      const closer = stack.pop()
+      candidate += closer === '{' ? '}' : ']'
+    }
+    // Remove trailing commas left dangling before a closing bracket.
+    candidate = candidate.replace(/,\s*([}\]])/g, '$1')
+    return candidate
+  }
+
+  // If full balancing fails, salvage by trimming back to progressively earlier
+  // structural points (end of last value, last object, last array).
+  const tryParse = (segment: string): unknown => {
+    try {
+      return JSON.parse(balance(segment))
+    } catch {
+      return undefined
+    }
+  }
+
+  const direct = tryParse(text.slice(start))
+  if (direct !== undefined) return direct
+
+  const scan = text.slice(start)
+  const cuts: number[] = []
+  for (let i = scan.length - 1; i > start; i--) {
+    const ch = scan[i]
+    if (ch === ',' || ch === '{' || ch === '[') {
+      cuts.push(i)
+      if (cuts.length > 8) break
+    }
+  }
+  for (const cut of cuts) {
+    const recovered = tryParse(scan.slice(0, cut))
+    if (recovered !== undefined) return recovered
+  }
+  return null
 }

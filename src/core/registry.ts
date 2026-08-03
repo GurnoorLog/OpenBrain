@@ -236,6 +236,47 @@ export const CAPABILITIES: Record<CapabilityType, CapabilityDef> = {
       return { outputs: { imageUrl: '', prompt } }
     },
   },
+  mcp: {
+    type: 'mcp',
+    label: 'MCP Tool',
+    icon: 'lucide:plug-zap',
+    description: 'Call a real tool on a configured MCP server (Stripe, Supabase, GitHub…)',
+    accent: '#22d3ee',
+    inputs: [{ id: 'input', label: 'Input', type: 'text' }],
+    outputs: [{ id: 'result', label: 'Result', type: 'any' }],
+    async execute(ctx) {
+      ctx.log('MCP tool selected — configure the server in the node', 'info')
+      return { outputs: { result: null } }
+    },
+  },
+  tool: {
+    type: 'tool',
+    label: 'Tool',
+    icon: 'lucide:wrench',
+    description: 'MCP tool node (branded by its server)',
+    accent: '#22d3ee',
+    inputs: [{ id: 'input', label: 'Input', type: 'text' }],
+    outputs: [{ id: 'result', label: 'Result', type: 'any' }],
+    async execute(ctx) {
+      ctx.log('Tool node selected — configure the server in the node', 'info')
+      return { outputs: { result: null } }
+    },
+  },
+  worker: {
+    type: 'worker',
+    label: 'Worker',
+    icon: 'lucide:bot',
+    description: 'Delegate a subtask to a reusable sub-brain (agent or pipeline)',
+    accent: '#a78bfa',
+    inputs: [{ id: 'input', label: 'Input', type: 'any' }],
+    outputs: [{ id: 'result', label: 'Result', type: 'any' }],
+    async execute(ctx) {
+      await sleep(400 + rand(300))
+      const context = textOf(ctx.inputs)
+      ctx.log(`Worker delegated: ${context.slice(0, 48) || 'no input'}`, 'info')
+      return { outputs: { result: null } }
+    },
+  },
   output: {
     type: 'output',
     label: 'Output',

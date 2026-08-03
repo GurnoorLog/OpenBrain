@@ -6,6 +6,12 @@ import { CAPABILITIES } from '../../core/registry'
 import { useBrainStore } from '../../store/useBrainStore'
 import type { CapabilityType } from '../../core/types'
 import { fetchModelCatalog, type ModelCatalogEntry } from '../../core/localModel'
+import {
+  MCP_NODE_TYPES,
+  MCP_SERVERS,
+  mcpBrandForNode,
+  mcpToolHints,
+} from '../../core/mcp/servers'
 export type BrainNodeData = { capability: CapabilityType }
 export type BrainFlowNode = Node<BrainNodeData, 'brain'>
 
@@ -52,6 +58,86 @@ function NodeInspector({ output }: { output: Record<string, unknown> }) {
 
 function portTop(count: number, index: number): number {
   return NODE_HEADER / 2 + (index - (count - 1) / 2) * PORT_GAP
+}
+
+// Strips the "<server>/" prefix off a configured tool for display.
+function bareToolName(configuration: Readonly<Record<string, unknown>> | undefined): string {
+  const tool = typeof configuration?.['tool'] === 'string' ? configuration['tool'] : ''
+  const slash = tool.lastIndexOf('/')
+  const dot = tool.lastIndexOf('.')
+  const separator = Math.max(slash, dot)
+  return separator > 0 ? tool.slice(separator + 1) : tool
+}
+
+// Small form shown on an MCP/tool/github node: pick the server, then the tool.
+// Writes configuration back so brain-core's resolveMcpTarget runs it as-is.
+function McpNodeEditor({ nodeId, configuration }: { nodeId: string; configuration?: Readonly<Record<string, unknown>> }) {
+  const server =
+    typeof configuration?.['mcpServer'] === 'string' ? configuration['mcpServer'] : ''
+  const tool = bareToolName(configuration)
+  const [argsText, setArgsText] = useState(() => {
+    const raw = configuration?.['arguments']
+    if (typeof raw === 'string') return raw
+    if (raw && typeof raw === 'object') return JSON.stringify(raw, null, 2)
+    return '{}'
+  })
+
+  const commit = (patch: { mcpServer?: string; tool?: string; arguments?: unknown }) => {
+    const nextServer = patch.mcpServer ?? server
+    const nextTool = patch.tool ?? tool
+    const config: Record<string, unknown> = {}
+    if (nextServer !== '') config.mcpServer = nextServer
+    if (nextTool !== '') config.tool = `${nextServer}/${nextTool}`
+    if (patch.arguments !== undefined) config.arguments = patch.arguments
+    useBrainStore.getState().setNodeConfiguration(nodeId, config)
+  }
+
+  const options = [...MCP_SERVERS.map((entry) => entry.name)]
+  if (!options.includes('github')) options.push('github')
+
+  return (
+    <div className="node-mcp-editor" onPointerDown={(e) => e.stopPropagation()} onDoubleClick={(e) => e.stopPropagation()}>
+      <label className="node-model-label">MCP server</label>
+      <select
+        className="node-model-select"
+        value={options.includes(server) ? server : ''}
+        onChange={(e) => {
+          const name = e.target.value
+          if (!name) return
+          commit({ mcpServer: name, tool: mcpToolHints(name)[0] ?? '' })
+        }}
+      >
+        {!options.includes(server) && <option value="">{server || 'choose a server…'}</option>}
+        {options.map((name) => (
+          <option key={name} value={name}>
+            {name}
+          </option>
+        ))}
+      </select>
+      <label className="node-model-label">Tool</label>
+      <input
+        className="node-mcp-tool"
+        placeholder={mcpToolHints(server)[0] ?? 'tool_name'}
+        value={tool}
+        onChange={(e) => commit({ tool: e.target.value })}
+      />
+      <label className="node-model-label">Arguments (JSON)</label>
+      <textarea
+        className="node-content-editor node-mcp-args"
+        placeholder='{ "query": "…" }'
+        value={argsText}
+        onBlur={() => {
+          try {
+            commit({ arguments: JSON.parse(argsText) })
+          } catch {
+            /* keep last valid state; do not save invalid JSON */
+          }
+        }}
+        onChange={(e) => setArgsText(e.target.value)}
+      />
+      <p className="node-model-hint">Stored as configuration.mcpServer / configuration.tool — the executor calls this server natively.</p>
+    </div>
+  )
 }
 
 // Lets the user pick which open model a Local Model node runs. Loads the cloud
@@ -103,8 +189,19 @@ function BrainNodeComponent({ id, data, selected }: NodeProps<BrainFlowNode>) {
 
   if (!node) return null
 
-  const accent = capability?.accent ?? '#94a3b8'
-  const icon = capability?.icon ?? 'lucide:box'
+  // MCP/tool/github nodes carry a brand: the icon, accent and title follow the
+  // configured server (Stripe shows the Stripe mark, Supabase shows Supabase…).
+  const isMcpNode = MCP_NODE_TYPES.includes(data.capability)
+  const brand = isMcpNode ? mcpBrandForNode(node.configuration) : null
+  const accent = brand ? brand.accent : (capability?.accent ?? '#94a3b8')
+  const icon = brand ? brand.icon : (capability?.icon ?? 'lucide:box')
+  const toolName = brand ? bareToolName(node.configuration) : ''
+  const title = brand ? brand.label : (capability?.label ?? data.capability)
+  const sub = brand
+    ? toolName !== ''
+      ? `MCP · ${toolName}`
+      : 'MCP tool'
+    : (capability?.description ?? 'Custom node')
   const inputs = capability?.inputs ?? []
   const outputs = capability?.outputs ?? []
 
@@ -126,11 +223,12 @@ function BrainNodeComponent({ id, data, selected }: NodeProps<BrainFlowNode>) {
           <iconify-icon icon={icon}></iconify-icon>
         </span>
         <span className="node-meta">
-          <span className="node-title">{capability?.label ?? data.capability}</span>
-          <span className="node-sub">{capability?.description ?? 'Custom node'}</span>
+          <span className="node-title">{title}</span>
+          <span className="node-sub">{sub}</span>
         </span>
         <span className={`node-status-dot ${node.status}`} />
       </div>
+      {isMcpNode && selected && <McpNodeEditor nodeId={id} configuration={node.configuration} />}
       {node.status === 'success' && node.output && (
         <div className="node-output">{summarizeOutput(node.output)}</div>
       )}

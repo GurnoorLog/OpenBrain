@@ -2,17 +2,23 @@
 
 // HTTP entrypoint for the OpenBrain cloud executor (Render Web Service).
 //
-//   GET  /health   -> liveness probe
-//   GET  /fetch    -> ?url=... server-side page fetch (CORS proxy for the browser tool)
-//   POST /run      -> { brain: { nodes, connections }, memory? } -> { outputs, order, durationMs, log }
-//   POST /composio -> { slug, arguments, apiKey?, connected_account_id? } -> { ok, data }
+//   GET  /health    -> liveness probe
+//   GET  /fetch     -> ?url=... server-side page fetch (CORS proxy for the browser tool)
+//   POST /run       -> { brain: { nodes, connections }, memory? } -> { outputs, order, durationMs, log }
+//   POST /mcp/call  -> { mcpServer, tool, arguments? } -> { ok, data } (native MCP)
+//   POST /composio  -> legacy Composio proxy (kept for backwards compatibility)
 //
 // CORS is wide open because the executor is a public compute endpoint; the
 // model API key lives only in this service's environment (server-side), so
-// exposing the endpoint itself is safe. Zero runtime dependencies.
+// exposing the endpoint itself is safe. MCP tool calls never see a token: the
+// browser posts only { mcpServer, tool, arguments }, and secrets come from
+// this service's mcp.json + env via {env:...} interpolation.
 
 const http = require('node:http')
+const fs = require('node:fs')
+const path = require('node:path')
 const { executeBrain } = require('./brain-core')
+const { createMcpManager } = require('./mcp-client')
 
 const PORT = Number(process.env.PORT || 3000)
 const REQUEST_TIMEOUT_MS = 150000
@@ -67,31 +73,76 @@ async function handleRun(req, res) {
     return
   }
   const memory = typeof payload.memory === 'string' ? payload.memory : ''
-  const composioApiKey =
-    typeof payload.composioApiKey === 'string' && payload.composioApiKey.trim() !== ''
-      ? payload.composioApiKey.trim()
-      : ''
-  const composioAccountId =
-    typeof payload.composioAccountId === 'string' && payload.composioAccountId.trim() !== ''
-      ? payload.composioAccountId.trim()
-      : ''
-  const composioEntityId =
-    typeof payload.composioEntityId === 'string' && payload.composioEntityId.trim() !== ''
-      ? payload.composioEntityId.trim()
-      : ''
+  const mcp = await getMcpManager()
   try {
     const result = await executeBrain({
       nodes: brain.nodes,
       connections: Array.isArray(brain.connections) ? brain.connections : [],
       memory,
-      composioApiKey,
-      composioAccountId,
-      composioEntityId,
+      mcp,
     })
     send(res, 200, { ok: true, ...result })
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     send(res, 500, { ok: false, error: message })
+  }
+}
+
+// Lazily-built, process-wide MCP manager. The config path resolves the cloud
+// service's own mcp.json (or the repo-root one when running from the repo),
+// so a bare `npm install` in this folder is all a deploy needs.
+let cachedMcp = null
+async function getMcpManager() {
+  if (cachedMcp) return cachedMcp
+  const candidates = [
+    process.env.MCP_CONFIG || '',
+    path.join(__dirname, 'mcp.json'),
+    path.join(__dirname, '..', 'mcp.json'),
+  ]
+  const firstExisting = candidates.find((candidate) => candidate !== '' && fs.existsSync(candidate))
+  const { manager } = await createMcpManager({ configPath: firstExisting || undefined }).catch(
+    () => ({ manager: null }),
+  )
+  cachedMcp = manager
+  return manager
+}
+
+// POST /mcp/call -> { mcpServer, tool, arguments? } -> { ok, data }
+// One-shot native MCP tool call for the SPA's GitHub/MCP nodes. The browser
+// only sends the server name + tool + args; tokens come from the server side.
+async function handleMcpCall(req, res) {
+  const raw = await readBody(req, MAX_BODY_BYTES)
+  let payload
+  try {
+    payload = JSON.parse(raw)
+  } catch {
+    send(res, 400, { ok: false, error: 'Invalid JSON body.' })
+    return
+  }
+  const server =
+    typeof payload.mcpServer === 'string' && payload.mcpServer.trim() !== ''
+      ? payload.mcpServer.trim()
+      : ''
+  const tool =
+    typeof payload.tool === 'string' && payload.tool.trim() !== ''
+      ? payload.tool.trim()
+      : ''
+  if (server === '' || tool === '') {
+    send(res, 400, { ok: false, error: 'Expected { mcpServer, tool, arguments? }.' })
+    return
+  }
+  const args = payload.arguments && typeof payload.arguments === 'object' ? payload.arguments : {}
+  const manager = await getMcpManager()
+  if (!manager) {
+    send(res, 500, { ok: false, error: 'No MCP servers configured (add an mcp.json).' })
+    return
+  }
+  try {
+    const data = await manager.call(server, tool, args)
+    send(res, 200, { ok: true, data })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    send(res, 502, { ok: false, error: message })
   }
 }
 
@@ -239,6 +290,14 @@ const server = http.createServer((req, res) => {
   if (req.method === 'POST' && url.pathname === '/run') {
     req.setTimeout(REQUEST_TIMEOUT_MS)
     handleRun(req, res).catch((error) => {
+      send(res, 500, { ok: false, error: error instanceof Error ? error.message : String(error) })
+    })
+    return
+  }
+
+  if (req.method === 'POST' && url.pathname === '/mcp/call') {
+    req.setTimeout(REQUEST_TIMEOUT_MS)
+    handleMcpCall(req, res).catch((error) => {
       send(res, 500, { ok: false, error: error instanceof Error ? error.message : String(error) })
     })
     return

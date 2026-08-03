@@ -7,6 +7,7 @@ import {
   ExecutionEvents,
   NodeExecutorRegistry,
   ToolNodeExecutor,
+  WorkerNodeExecutor,
   createMockExecutors,
 } from '../../core/execution'
 import { CAPABILITIES } from '../../core/registry'
@@ -27,6 +28,9 @@ executorRegistry.registerAll(
 for (const tool of TOOLS) {
   executorRegistry.register(tool.nodeType, new ToolNodeExecutor(tool))
 }
+// Worker nodes delegate to saved sub-brains or curated skills; register after
+// the base executors so nested sub-runs resolve through the same registry.
+executorRegistry.register('worker', new WorkerNodeExecutor())
 
 let activeEngine: ExecutionEngine | null = null
 

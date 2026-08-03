@@ -18,6 +18,16 @@ import type { BrainSpec, CapabilityType } from '../../core/types'
 // logging. Tokens always flow through the injected TokenProvider instances —
 // the adapter never reads the environment variables itself.
 
+// Base URL for the OpenBrain Runtime (serves /local/finetune and the SPA).
+// Prefers the configured URL; when the SPA is served by the runtime itself
+// the page origin is the runtime, so same-origin calls need no CORS.
+function runtimeBaseUrl(): string {
+  const configured = import.meta.env.VITE_RUNTIME_URL as string | undefined
+  if (configured && configured.trim() !== '') return configured.trim().replace(/\/+$/, '')
+  if (typeof location !== 'undefined' && location.origin && location.origin !== 'null') return location.origin
+  return 'http://localhost:8080'
+}
+
 interface FineTuneServices {
   readonly plannerProvider: HuggingFaceProvider
   readonly launchProvider: FireworksProvider
@@ -111,7 +121,7 @@ export async function planFineTune(
     store.addLog(`Fine-tune spec invalid: ${errors.map((e) => e.message).join(' ')}`, 'warning')
   }
 
-  const specNode = buildSpecNodes(viewport)
+  const specNode = buildSpecNodes(viewport, spec)
   store.setBrain(specNode)
   store.setPendingFineTune(spec)
   store.addLog(
@@ -210,7 +220,134 @@ export function confirmAndLaunch(spec: FineTuneJobSpec): FineTuneJobRun {
   }
 }
 
-function buildSpecNodes(viewport: { width: number; height: number }): BrainSpec {
+// LOCAL MACHINE path — the dual to confirmAndLaunch. Instead of the Fireworks
+// cloud executor, this submits the spec to the local Runtime's /local/finetune
+// endpoint, which runs the self-adaptive trainer (train-local.js +
+// train_local.py) ON THIS MACHINE: it probes GPU/VRAM/libs at runtime, picks a
+// base model that fits, trains a LoRA/QLoRA adapter, and writes it into the
+// workspace. The spec is adapted for local execution (empty baseModel = auto
+// probe, SFT+LoRA, capped steps so it finishes in a demo). Streams the trainer
+// log + progress into the node and the Agent Log via the job status endpoint.
+export function confirmAndLaunchLocal(spec: FineTuneJobSpec): FineTuneJobRun {
+  const store = useBrainStore.getState()
+  store.setNode('finetune', { status: 'running', output: { status: 'probing local machine…' } })
+  store.addLog('Confirming fine-tune job — running on this machine (no Fireworks GPU cost).', 'info')
+
+  const jobId = crypto.randomUUID()
+  let disposed = false
+  let pollTimer: ReturnType<typeof setInterval> | undefined
+  let lastLogCount = 0
+  let firstStartedLog = false
+
+  const disposers: (() => void)[] = []
+  const dispose = () => {
+    if (disposed) return
+    disposed = true
+    if (pollTimer) clearInterval(pollTimer)
+    for (const disposeFn of disposers) disposeFn()
+  }
+
+  const applyStatus = (status: {
+    status?: string
+    log?: readonly { level?: string; message?: string }[]
+    progress?: number
+    adapter?: string
+    error?: string
+  }) => {
+    if (status.log) {
+      const fresh = status.log.slice(lastLogCount)
+      lastLogCount = status.log.length
+      for (const entry of fresh) {
+        if (!entry?.message) continue
+        const level = entry.level === 'error' ? 'error' : entry.level === 'warning' ? 'warning' : 'info'
+        store.addLog(entry.message, level)
+      }
+    }
+    if (status.status === 'running') {
+      const detail =
+        status.progress != null && status.progress > 0
+          ? `training… (step ${status.progress})`
+          : firstStartedLog
+            ? 'training…'
+            : 'probing local machine…'
+      if (status.progress != null && status.progress > 0) firstStartedLog = true
+      store.setNode('finetune', { status: 'running', output: { jobId, progress: status.progress, message: detail } })
+    } else if (status.status === 'completed') {
+      store.setNode('finetune', { status: 'success', output: { jobId, model: status.adapter ?? 'local adapter' } })
+      store.addLog(`Local fine-tune complete. Adapter saved to ${status.adapter}.`, 'success')
+      dispose()
+    } else if (status.status === 'failed') {
+      const message = status.error ?? 'Local trainer failed.'
+      store.setNode('finetune', { status: 'error', error: message })
+      store.addLog(`Local fine-tune failed: ${message}`, 'error')
+      dispose()
+    }
+  }
+
+  void (async () => {
+    try {
+      const baseUrl = runtimeBaseUrl()
+      const response = await fetch(`${baseUrl}/local/finetune`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          jobId,
+          maxSteps: 4,
+          spec: {
+            goal: spec.goal,
+            baseModel: '',
+            dataset: spec.dataset,
+            method: 'lora',
+            trainingType: 'sft',
+            hyperparameters: spec.hyperparameters,
+          },
+        }),
+      })
+      const started = (await response.json().catch(() => ({}))) as {
+        ok?: boolean
+        jobId?: string
+        status?: string
+        error?: string
+      }
+      if (!response.ok) {
+        throw new Error(started.error ?? `Runtime returned ${response.status}.`)
+      }
+      store.setNode('finetune', { status: 'running', output: { jobId, status: 'probing local machine…' } })
+
+      const poll = async () => {
+        if (disposed) return
+        try {
+          const pollResponse = await fetch(`${baseUrl}/local/finetune/${encodeURIComponent(jobId)}`)
+          const status = (await pollResponse.json().catch(() => ({}))) as {
+            status?: string
+            log?: { level?: string; message?: string }[]
+            progress?: number
+            adapter?: string
+            error?: string
+          }
+          if (!pollResponse.ok) throw new Error(status.error ?? `Status check failed (${pollResponse.status}).`)
+          applyStatus(status)
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error)
+          store.setNode('finetune', { status: 'error', error: message })
+          store.addLog(`Local fine-tune failed: ${message}`, 'error')
+          dispose()
+        }
+      }
+      await poll()
+      if (!disposed) pollTimer = setInterval(poll, 2000)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      store.setNode('finetune', { status: 'error', error: message })
+      store.addLog(`Local fine-tune launch failed: ${message}`, 'error')
+      dispose()
+    }
+  })()
+
+  return { jobId, spec, dispose }
+}
+
+function buildSpecNodes(viewport: { width: number; height: number }, spec?: FineTuneJobSpec): BrainSpec {
   const centerX = Math.round(viewport.width / 2)
   const centerY = Math.round(viewport.height / 2)
   const finetuneNode = {
@@ -218,6 +355,17 @@ function buildSpecNodes(viewport: { width: number; height: number }): BrainSpec 
     type: 'finetune' as CapabilityType,
     x: centerX - 160,
     y: centerY - 40,
+    configuration: spec
+      ? {
+          goal: spec.goal,
+          baseModel: spec.baseModel,
+          dataset: spec.dataset,
+          method: spec.method,
+          trainingType: spec.trainingType,
+          hyperparameters: spec.hyperparameters,
+          targetRepoName: spec.targetRepoName,
+        }
+      : {},
   }
   const outputNode = {
     id: 'output',

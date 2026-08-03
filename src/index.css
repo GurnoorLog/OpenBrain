@@ -787,6 +787,50 @@ body {
     line-height: 1.4;
     color: #71717a;
   }
+
+  .node-mcp-editor {
+    margin: 0 14px 12px;
+    padding: 8px 10px;
+    border-radius: 8px;
+    background: rgba(0, 0, 0, 0.35);
+    border: 1px solid rgba(34, 211, 238, 0.25);
+  }
+
+  .node-mcp-tool {
+    display: block;
+    width: 100%;
+    box-sizing: border-box;
+    border-radius: 6px;
+    padding: 6px 8px;
+    font-size: 10px;
+    color: #e4e4e7;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    outline: none;
+    margin-bottom: 6px;
+  }
+
+  .node-mcp-tool:focus {
+    border-color: rgba(34, 211, 238, 0.5);
+  }
+
+  .node-mcp-editor .node-model-label {
+    color: #67e8f9;
+    margin-top: 4px;
+  }
+
+  .node-mcp-editor .node-content-editor {
+    width: 100%;
+    box-sizing: border-box;
+    margin: 0 0 2px;
+    min-height: 34px;
+    max-height: 90px;
+    border-color: rgba(34, 211, 238, 0.25);
+  }
+
+  .node-mcp-args {
+    font-size: 9px;
+  }
 }
 
 .react-flow__handle {

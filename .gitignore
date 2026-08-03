@@ -34,3 +34,7 @@ dist-ssr
 workspace
 registry
 runtime/.runtime-cache
+
+# Compiled cache dirs
+unsloth_compiled_cache
+runtime/unsloth_compiled_cache

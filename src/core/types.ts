@@ -11,6 +11,9 @@ export type CapabilityType =
   | 'finetune'
   | 'news'
   | 'imagegen'
+  | 'mcp'
+  | 'tool'
+  | 'worker'
   | 'output'
 
 export type NodeStatus = 'idle' | 'pending' | 'running' | 'success' | 'error'

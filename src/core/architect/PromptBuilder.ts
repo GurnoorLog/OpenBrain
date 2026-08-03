@@ -1,6 +1,14 @@
 import type { NodePort, NodeType, ProviderConfiguration, ProviderId, ProviderKind, ProviderMessage } from '../domain'
 import type { DesignRequest } from './ArchitectProvider'
 import { FIREWORKS_MODELS } from '../providers/fireworksModels'
+import {
+  MCP_SERVERS,
+  MCP_SERVER_NAMES,
+  mcpBrandForServer,
+  mcpToolHints,
+  serverKindLabel,
+} from '../mcp/servers'
+import { SKILL_CATALOG } from '../skills/skillLibrary'
 
 export interface NodeCatalogEntry {
   readonly type: NodeType
@@ -47,7 +55,7 @@ export const NODE_CATALOG: readonly NodeCatalogEntry[] = [
   {
     type: 'github',
     description:
-      'Run a real GitHub operation through Composio. MUST set "configuration" as { "tool": "<Composio GitHub tool slug>", "arguments": { ... } }. Valid slugs include GITHUB_GET_A_USER ({"username"}), GITHUB_LIST_REPOSITORIES_FOR_THE_AUTHENTICATED_USER ({}), GITHUB_GET_A_REPOSITORY ({"owner","repo"}), GITHUB_GET_A_REPOSITORY_README ({"owner","repo"}), GITHUB_LIST_REPOSITORY_ISSUES ({"owner","repo"}), GITHUB_GET_AN_ISSUE ({"owner","repo","issue_number"}), GITHUB_SEARCH_REPOSITORIES ({"q"}).',
+      'Run a real GitHub operation through the native "github" MCP server. MUST set "configuration" as { "mcpServer": "github", "tool": "github/<tool>", "arguments": { ... } }. Example tools: github/get_repository ({"owner","repo"}), github/list_repositories ({}), github/search_repositories ({"q"}), github/list_issues ({"owner","repo"}), github/get_file_contents ({"owner","repo","path"}).',
     inputs: [
       { id: 'owner', label: 'Owner', kind: 'text' },
       { id: 'repo', label: 'Repo', kind: 'text' },
@@ -112,7 +120,7 @@ export const NODE_CATALOG: readonly NodeCatalogEntry[] = [
   {
     type: 'mcp',
     description:
-      'Execute any Composio tool by slug. MUST set "configuration" as { "tool": "<Composio tool slug>", "arguments": { ... } }. Valid no-auth examples include HACKERNEWS_GET_TOP_STORIES ({}), HACKERNEWS_SEARCH_POSTS ({"query"}), HACKERNEWS_GET_USER ({"username"}). For apps with auth the slug is {TOOLKIT}_{ACTION}, e.g. SLACK_SEND_MESSAGE, NOTION_CREATE_PAGE.',
+      'Execute a tool on a configured Model Context Protocol server (replaced at prompt time with the live server list)',
     inputs: [{ id: 'input', label: 'Input', kind: 'any' }],
     outputs: [{ id: 'result', label: 'Result', kind: 'any' }],
   },
@@ -139,6 +147,13 @@ export const NODE_CATALOG: readonly NodeCatalogEntry[] = [
     description: 'Branch on a condition',
     inputs: [{ id: 'condition', label: 'Condition', kind: 'boolean' }],
     outputs: [{ id: 'passed', label: 'Passed', kind: 'any' }],
+  },
+  {
+    type: 'worker',
+    description:
+      'Delegate a subtask to a reusable sub-brain — an existing "agent"/"subbrain" brain from the project OR a curated skill from the Available sub-brains list. Set "configuration": { "brain": "<brain id, skill id, or name>", "input": "optional literal to pass to the worker" }. The sub-brain/skill runs as its own pipeline and its result returns through the "result" port. Prefer this over a huge single graph when the request is an autonomous agent with many daily subtasks, or when a listed skill matches a subtask.',
+    inputs: [{ id: 'input', label: 'Input', kind: 'any' }],
+    outputs: [{ id: 'result', label: 'Result', kind: 'any' }],
   },
   {
     type: 'tool',
@@ -184,7 +199,7 @@ export class PromptBuilder {
         { role: 'user', content: this.buildUserPrompt(request) },
       ],
       temperature: options.temperature ?? 0.4,
-      maxTokens: options.maxTokens ?? 8192,
+      maxTokens: options.maxTokens ?? 16384,
     }
   }
 
@@ -192,6 +207,7 @@ export class PromptBuilder {
     return [
       this.instructions(),
       this.nodeCatalogPrompt(),
+      this.skillsPrompt(),
       this.providerCatalogPrompt(options.provider),
       this.capabilitiesPrompt(),
       this.outputSchemaPrompt(),
@@ -234,20 +250,60 @@ export class PromptBuilder {
       '- Explicit capabilities the user NAMES in their request MUST be realized as the matching node type and wired into the graph. Memory ("remember", "persist context") => a "memory" node; "browse the web" / live pages => a "browser" node; image generation => an "imagegen" node; current news headlines => a "news" node. Do not mention the capability without adding its node.',
       '- For any request to "browse the web", "research on the web", or "gather information from websites", use the "browser" node and set its concrete target URL in "configuration" ({ "url": "https://..." }). Prefer "browser" over "news" unless the user explicitly asks for live news headlines.',
       '- The "news" node requires a paid external API key — avoid it for general research; a research assistant that "browses the web" MUST use "browser", not "news".',
+      '- If the user NAMES an external service that appears in the configured MCP server list (Stripe, Supabase, GitHub, filesystem, …), realize it as an "mcp" node (or "github" for GitHub) with "configuration" = { "mcpServer": "<server>", "tool": "<server>/<tool>", "arguments": { ... } } using ONLY the servers and example tools listed for the "mcp" node type. Wire the mcp node\'s "result" into the "llm" node so the model reads its output. Never mention the service without adding its node.',
       '- Every data source node you add (browser, filesystem, news, imagegen) MUST connect its output into the "llm" node so the model actually reads that data; a source node whose output reaches nobody is a FAILURE.',
       '- Give EVERY "llm" node a real identity and task in its "configuration.instructions" — a concise role/system prompt describing exactly what that model does (e.g. for research: "You are a research assistant. Answer using ONLY the provided source text; summarize and compare sources; cite them; output markdown."). The model uses this as its system prompt, so without it the LLM answers as a generic chatbot.',
       '- Add a "rag" node when the request references documents, a knowledge base, a dataset, or "your docs"/"RAG": the rag node retrieves relevant context for the llm. Otherwise omit it (YAGNI).',
       '- Cross-run memory pattern (use BOTH): a "memory" READ node with NO incoming edges whose "stored" output feeds the llm node on its "history" input (memory-read -> llm "history") so later runs show "(From memory — prior runs: ...)", AND a "memory" WRITE node that receives the llm node\'s "response" on its "value" input (llm -> memory-write). A single memory node that only writes (llm -> memory) without reading back is a FAILURE. Do not make the llm depend on the write node or you create a cycle.',
+      '- AUTONOMOUS / REPEATING AGENT pattern: when the user asks for an agent that "runs daily", "runs on a schedule", "automates every morning", or similar, set the optional "agent" field (see schema): { "enabled": true, "schedule": { "cron": "0 9 * * *", "timezone": "UTC" } }. Map each recurring daily task to its own "worker" node whose "configuration.brain" names the sub-brain (agent/pipeline) or curated skill that performs it, and keep one "llm" node that decides per run which workers to invoke. Set "executionMode" to "auto" so a scheduled run flows through the graph. When a task in the Available sub-brains list matches, reference its exact id — the worker executor runs it as its own pipeline.',
+      '- SKILL ROUTING: the Available sub-brains list defines curated specialist skills (TDD, code review, spec writing, security audit, deck building, API reference, closeout, handoff). Use a "worker" node with "configuration.brain" = the skill id whenever the request (or one of its subtasks) matches that skill\'s use case — the main brain stays small and routes, the skill sub-brain does the specialist work.',
     ].join('\n')
   }
 
   private nodeCatalogPrompt(): string {
     const lines = NODE_CATALOG.map((entry) => {
+      if (entry.type === 'mcp') return this.mcpCatalogPrompt()
       const input = entry.inputs.length > 0 ? entry.inputs.map((port) => port.id).join('|') : 'none'
       const output = entry.outputs.length > 0 ? entry.outputs.map((port) => port.id).join('|') : 'none'
       return `- ${entry.type}: ${entry.description} (in:${input}, out:${output})`
     })
     return `Available node types:\n${lines.join('\n')}`
+  }
+
+  // Curated skills are reusable sub-brains the worker node can delegate to.
+  // Listing their ids and use cases teaches the architect to route matching
+  // subtasks to a specialist sub-brain instead of inlining every step.
+  private skillsPrompt(): string {
+    const lines = SKILL_CATALOG.map(
+      (skill) => `- ${skill.id} ("${skill.name}"): ${skill.description} Use when: ${skill.useWhen.join('; ')}`,
+    )
+    return [
+      'Available sub-brains (curated skills you can delegate to via a "worker" node):',
+      lines.join('\n'),
+      'Set the worker node\'s "configuration" = { "brain": "<skill id>", "input": "<the task>" }.',
+    ].join('\n')
+  }
+
+  // The mcp node is only usable when the user actually has servers configured,
+  // so its description is generated live from the bundled mcp.json. Each entry
+  // names the server and gives real example tool names the executor accepts.
+  private mcpCatalogPrompt(): string {
+    const inOut = '(in:input, out:result)'
+    if (MCP_SERVER_NAMES.length === 0) {
+      return `- mcp: Execute a tool on a Model Context Protocol server. MUST set "configuration" as { "mcpServer": "<server>", "tool": "<server>/<tool>", "arguments": { ... } }. No MCP servers are configured in this build — prefer "browser"/"github"/"filesystem" nodes unless the user asks for a specific service. ${inOut}`
+    }
+    const servers = MCP_SERVER_NAMES.map((name) => {
+      const brand = mcpBrandForServer(name)
+      const hints = mcpToolHints(name).join(', ')
+      return `    - ${name} (${brand.label}, ${serverKindLabel(
+        MCP_SERVERS.find((server) => server.name === name)?.kind ?? 'remote',
+      )}) — example tools: ${hints}`
+    })
+    return [
+      `- mcp: Execute a real tool on a configured Model Context Protocol server. MUST set "configuration" as { "mcpServer": "<server name>", "tool": "<server>/<tool>", "arguments": { ... } } — use ONLY server names and example tools from this list, never invent slugs. Configured servers:`,
+      servers.join('\n'),
+      `  Pick the server whose brand matches the user's request (Stripe → payments, GitHub → repos, Supabase → databases, filesystem → local files). ${inOut}`,
+    ].join('\n')
   }
 
   private providerCatalogPrompt(active?: ProviderConfiguration): string {
@@ -269,7 +325,7 @@ export class PromptBuilder {
       '- Memory: working / long-term / episodic / semantic memory scoped to a brain, global, or shared.',
       '- Knowledge: RAG knowledge bases with chunk size, overlap, and retrieval strategy.',
       '- Execution: "manual" (user triggers) or "auto" (dependencies run automatically).',
-      '- MCP tools, marketplaces, and external services can be referenced as future capability nodes.',
+      `- MCP tools: native Model Context Protocol servers configured in mcp.json${MCP_SERVER_NAMES.length > 0 ? ` (${MCP_SERVER_NAMES.join(', ')})` : ' (none configured yet)'}. An "mcp" node must set configuration.mcpServer and configuration.tool.`,
     ].join('\n')
   }
 
@@ -285,7 +341,8 @@ export class PromptBuilder {
       '  "memoryRecommendation": { "enabled": boolean, "kind": string, "scope": string },',
       '  "knowledgeRecommendation": { "required": boolean, "sourceTypes": string[] },',
       '  "executionMode": "manual" | "auto",',
-'"nodes": [',
+      '  "agent": { "enabled": true, "schedule": { "cron": "0 9 * * *", "timezone": "UTC" } },   // OPTIONAL — only for autonomous/scheduled agents',
+      '"nodes": [',
       '    { "id": string, "type": <a node type>, "title": string, "description": string,',
       '      "reason": string, "configuration": object,',
       '      "positionHint": { "column": number, "row": number },',

@@ -7,7 +7,9 @@
 //
 //   Serves the OpenBrain Desktop SPA (dist/)
 //   POST /run           -> executes a brain graph (same core as the cloud)
-//   POST /composio      -> proxies Composio tool calls (GitHub, MCP, HN…)
+//   GET  /mcp           -> lists configured MCP servers and their tools
+//   POST /mcp/call      -> one-shot native MCP tool call (SPA GitHub/MCP nodes)
+//   POST /composio      -> legacy proxy for the SPA's in-browser GitHub tools
 //   GET  /fetch?url=    -> server-side page fetch for the Browser node
 //   POST /local/files   -> read/write/list files in the user's WORKSPACE
 //   POST /local/finetune-> launch a local fine-tune job in the workspace
@@ -39,6 +41,133 @@ function loadBrainCore() {
 }
 const { executeBrain } = loadBrainCore()
 
+// agent-daemon is the scheduler that runs .brain files with an `agent` block.
+// Resolved next to the runtime in Docker, or from the repo runtime dir.
+function loadAgentDaemon() {
+  const candidates = [path.join(__dirname, 'agent-daemon.js')]
+  for (const candidate of candidates) {
+    if (fs.existsSync(candidate)) return require(candidate)
+  }
+  return null
+}
+const { createAgentDaemon } = loadAgentDaemon() ?? { createAgentDaemon: null }
+
+// mcp-client is the native Model Context Protocol client (the same one opencode
+// uses). It connects to any server declared in mcp.json — stdio or remote.
+function loadMcpClient() {
+  const candidates = [
+    path.join(__dirname, 'mcp-client.js'),
+    path.join(__dirname, '..', 'cloud-executor', 'mcp-client.js'),
+  ]
+  for (const candidate of candidates) {
+    if (fs.existsSync(candidate)) return require(candidate)
+  }
+  return null
+}
+
+let cachedMcpManagerPromise = null
+// `mcpConfig` may be a config file path (string), an inline servers map
+// (object, e.g. the TUI sends the host's parsed mcp.json), or absent (discover
+// the runtime's own mcp.json).
+async function resolveMcpManager(mcpConfig) {
+  const loader = loadMcpClient()
+  if (!loader) return null
+  if (mcpConfig && typeof mcpConfig === 'object' && !Array.isArray(mcpConfig)) {
+    const fresh = await loader
+      .createMcpManager({ servers: mcpConfig })
+      .catch(() => ({ manager: null, file: null }))
+    return fresh.manager
+  }
+  if (!mcpConfig) {
+    if (!cachedMcpManagerPromise) {
+      cachedMcpManagerPromise = loader
+        .createMcpManager({})
+        .catch((error) => {
+          console.error(`MCP init failed: ${error.message}`)
+          return { manager: null, file: null }
+        })
+    }
+    return (await cachedMcpManagerPromise).manager
+  }
+  const fresh = await loader
+    .createMcpManager({ configPath: String(mcpConfig) })
+    .catch(() => ({ manager: null, file: null }))
+  return fresh.manager
+}
+
+async function handleListMcp(req, res) {
+  const loader = loadMcpClient()
+  if (!loader) {
+    send(res, 200, { ok: true, file: null, servers: [], tools: {} })
+    return
+  }
+  const { file, manager } = await loader
+    .createMcpManager({})
+    .catch(() => ({ file: null, manager: null }))
+  if (!manager) {
+    send(res, 200, { ok: true, file, servers: [], tools: {} })
+    return
+  }
+  const tools = {}
+  for (const name of manager.serverNames()) {
+    try {
+      const found = await manager.listTools(name)
+      tools[name] = found.map((tool) => tool.name)
+    } catch {
+      tools[name] = []
+    }
+  }
+  send(res, 200, { ok: true, file, servers: manager.serverNames(), tools })
+}
+
+// POST /mcp/call -> { mcpServer, tool, arguments? } -> { ok, data }
+// One-shot native MCP tool call against a configured server. The browser can't
+// run an MCP client, so the SPA's GitHub/MCP tool nodes route through here
+// (or the cloud executor). Secrets never leave the server: they come from the
+// server's mcp.json + env via {env:...} interpolation.
+async function handleMcpCall(req, res) {
+  const raw = await readBody(req, MAX_BODY_BYTES)
+  let payload
+  try {
+    payload = JSON.parse(raw)
+  } catch {
+    send(res, 400, { ok: false, error: 'Invalid JSON body.' })
+    return
+  }
+  const server =
+    typeof payload.mcpServer === 'string' && payload.mcpServer.trim() !== ''
+      ? payload.mcpServer.trim()
+      : ''
+  const tool =
+    typeof payload.tool === 'string' && payload.tool.trim() !== ''
+      ? payload.tool.trim()
+      : ''
+  if (server === '' || tool === '') {
+    send(res, 400, { ok: false, error: 'Expected { mcpServer, tool, arguments? }.' })
+    return
+  }
+  const args = payload.arguments && typeof payload.arguments === 'object' ? payload.arguments : {}
+  const loader = loadMcpClient()
+  if (!loader) {
+    send(res, 500, { ok: false, error: 'MCP client is not available on this service.' })
+    return
+  }
+  const { manager } = await loader
+    .createMcpManager({})
+    .catch(() => ({ manager: null, file: null }))
+  if (!manager) {
+    send(res, 500, { ok: false, error: 'No MCP servers configured (add an mcp.json).' })
+    return
+  }
+  try {
+    const data = await manager.call(server, tool, args)
+    send(res, 200, { ok: true, data })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    send(res, 502, { ok: false, error: message })
+  }
+}
+
 const PORT = Number(process.env.PORT || 8080)
 const HOST = process.env.HOST || '0.0.0.0'
 const DIST_DIR = process.env.DIST_DIR || path.join(__dirname, 'dist')
@@ -50,6 +179,9 @@ const PLUGINS_DIR = path.resolve(
 const REQUEST_TIMEOUT_MS = 150000
 const MAX_BODY_BYTES = 16 * 1024 * 1024
 
+const AGENT_RUNS_DIR = path.join(WORKSPACE, '.agents')
+const AGENT_RUNS_FILE = path.join(AGENT_RUNS_DIR, 'runs.jsonl')
+
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
@@ -57,7 +189,7 @@ const CORS_HEADERS = {
   'Access-Control-Max-Age': '86400',
 }
 
-for (const dir of [WORKSPACE, REGISTRY, PLUGINS_DIR]) {
+for (const dir of [WORKSPACE, REGISTRY, PLUGINS_DIR, AGENT_RUNS_DIR]) {
   fs.mkdirSync(dir, { recursive: true })
 }
 
@@ -153,23 +285,61 @@ async function handleRun(req, res) {
     send(res, 400, { ok: false, error: 'Expected { brain: { nodes, connections } }.' })
     return
   }
+  const mcp = await resolveMcpManager(payload.mcpConfig)
+
+  // SSE streaming mode: when the client asks for it, node events and log lines
+  // are pushed live as `data: <json>\n\n` frames instead of a single response.
+  // Each frame carries `{ type, ... }`; the final frame is `{ type: 'done', result }`.
+  const stream = payload.stream === true
+  if (stream) {
+    res.writeHead(200, {
+      'Content-Type': 'text/event-stream; charset=utf-8',
+      'Cache-Control': 'no-cache',
+      Connection: 'keep-alive',
+      ...CORS_HEADERS,
+    })
+    const writeEvent = (event) => {
+      if (res.writableEnded) return
+      res.write(`data: ${JSON.stringify(event)}\n\n`)
+    }
+    try {
+      const result = await executeBrain({
+        nodes: brain.nodes,
+        connections: Array.isArray(brain.connections) ? brain.connections : [],
+        memory: typeof payload.memory === 'string' ? payload.memory : '',
+        mcp,
+        knowledgeDir:
+          typeof payload.knowledgeDir === 'string' && payload.knowledgeDir.trim() !== ''
+            ? payload.knowledgeDir.trim()
+            : KNOWLEDGE_DIR,
+        resolveWorker: agentDaemon ? agentDaemon.resolveWorker : undefined,
+        onEvent: (event) => writeEvent({ type: 'event', event }),
+        onLog: (entry) => writeEvent({ type: 'log', entry }),
+        onToken: (token) => writeEvent({ type: 'token', token }),
+      })
+      writeEvent({ type: 'done', result })
+      res.end()
+    } catch (error) {
+      writeEvent({
+        type: 'done',
+        error: error instanceof Error ? error.message : String(error),
+      })
+      res.end()
+    }
+    return
+  }
+
   try {
     const result = await executeBrain({
       nodes: brain.nodes,
       connections: Array.isArray(brain.connections) ? brain.connections : [],
       memory: typeof payload.memory === 'string' ? payload.memory : '',
-      composioApiKey:
-        typeof payload.composioApiKey === 'string' && payload.composioApiKey.trim() !== ''
-          ? payload.composioApiKey.trim()
-          : process.env.COMPOSIO_API_KEY || '',
-      composioAccountId:
-        typeof payload.composioAccountId === 'string' && payload.composioAccountId.trim() !== ''
-          ? payload.composioAccountId.trim()
-          : process.env.COMPOSIO_ACCOUNT_ID || '',
-      composioEntityId:
-        typeof payload.composioEntityId === 'string' && payload.composioEntityId.trim() !== ''
-          ? payload.composioEntityId.trim()
-          : process.env.COMPOSIO_ENTITY_ID || '',
+      mcp,
+      knowledgeDir:
+        typeof payload.knowledgeDir === 'string' && payload.knowledgeDir.trim() !== ''
+          ? payload.knowledgeDir.trim()
+          : KNOWLEDGE_DIR,
+      resolveWorker: agentDaemon ? agentDaemon.resolveWorker : undefined,
     })
     send(res, 200, { ok: true, ...result })
   } catch (error) {
@@ -346,10 +516,10 @@ async function handleLocalFiles(req, res) {
 
 // --------------------------------------------------------------------------
 // /local/finetune — local-first fine-tuning. Writes the job spec into the
-// workspace and, when a trainer is configured, executes it on the machine.
-// The default trainer (local-train.js) is intentionally honest: it requires
-// an explicitly configured trainer command (e.g. an accelerate/axolotl image
-// or a user script) and reports progress. No silent fake training.
+// workspace and runs the self-adaptive local trainer (train-local.js +
+// train_local.py) which probes the machine it runs on and adapts. If the
+// trainer or Python are missing, the job fails loudly — no fake training.
+// GET /local/finetune/<jobId> polls the live job status.
 // --------------------------------------------------------------------------
 const finetuneJobs = new Map()
 
@@ -368,16 +538,49 @@ async function handleLocalFinetune(req, res) {
       : `ft-${Date.now().toString(36)}`
   const existing = finetuneJobs.get(jobId)
   if (existing) {
-    send(res, 200, { ok: true, jobId, status: existing.status })
+    send(res, 200, { ok: true, jobId, status: existing.status, ...(existing.error ? { error: existing.error } : {}) })
     return
   }
   const spec = payload.spec && typeof payload.spec === 'object' ? payload.spec : {}
   const targetDir = path.join(WORKSPACE, 'finetunes', jobId)
   fs.mkdirSync(targetDir, { recursive: true })
   fs.writeFileSync(path.join(targetDir, 'spec.json'), JSON.stringify(spec, null, 2))
-  const job = { status: 'queued', progress: 0, startedAt: new Date().toISOString() }
+  const job = { status: 'running', progress: 0, startedAt: new Date().toISOString() }
   finetuneJobs.set(jobId, job)
   send(res, 200, { ok: true, jobId, status: job.status, targetDir })
+
+  const { runLocalFineTune } = require('./train-local.js')
+  try {
+    const outcome = await runLocalFineTune({
+      spec,
+      jobDir: targetDir,
+      maxSteps: typeof payload.maxSteps === 'number' ? payload.maxSteps : 0,
+      onLog: (entry) => {
+        job.log = job.log || []
+        job.log.push(entry)
+      },
+      onProgress: (state) => {
+        if (state.type === 'progress') {
+          job.progress = Math.round((state.step_number || 0) + 1)
+        }
+      },
+    })
+    job.status = 'completed'
+    job.result = outcome.result
+    job.adapter = outcome.adapter
+  } catch (error) {
+    job.status = 'failed'
+    job.error = error instanceof Error ? error.message : String(error)
+  }
+}
+
+async function handleFinetuneStatus(req, res, jobId) {
+  const job = finetuneJobs.get(jobId)
+  if (!job) {
+    send(res, 404, { ok: false, error: `No fine-tune job "${jobId}".` })
+    return
+  }
+  send(res, 200, { ok: true, jobId, ...job })
 }
 
 // --------------------------------------------------------------------------
@@ -402,6 +605,9 @@ async function handleRegistry(req, res) {
         description: file?.description ?? '',
         file: name,
         exportedAt: file?.metadata?.exportedAt ?? null,
+        agent: file?.agent
+          ? { enabled: Boolean(file.agent.enabled), schedule: file.agent.schedule ?? null }
+          : null,
       })
     }
     send(res, 200, { ok: true, registry: REGISTRY, brains })
@@ -474,6 +680,43 @@ async function handleSystem(req, res) {
 }
 
 // --------------------------------------------------------------------------
+// /agents — the agent daemon turns .brain files with an `agent` block into
+// scheduled autonomous agents. It scans the registry each minute and runs due
+// brains through the shared executeBrain core. Worker nodes inside those brains
+// resolve other registry brains and curated skills (see brain-core).
+// --------------------------------------------------------------------------
+const KNOWLEDGE_DIR = process.env.OPENBRAIN_KNOWLEDGE_DIR || path.join(WORKSPACE, 'knowledge')
+const agentDaemon =
+  createAgentDaemon && typeof createAgentDaemon === 'function'
+    ? createAgentDaemon({
+        registryDir: REGISTRY,
+        resolveMcpManager: () => resolveMcpManager(undefined),
+        executeBrain,
+        knowledgeDir: KNOWLEDGE_DIR,
+        runsFile: AGENT_RUNS_FILE,
+      })
+    : null
+if (agentDaemon) agentDaemon.start()
+
+async function handleAgents(req, res, pathname) {
+  if (!agentDaemon) {
+    send(res, 503, { ok: false, error: 'Agent daemon is not available on this service.' })
+    return
+  }
+  const runMatch = /^\/agents\/([^/]+)\/run$/.exec(pathname)
+  if (req.method === 'POST' && runMatch) {
+    const result = await agentDaemon.triggerRun(decodeURIComponent(runMatch[1]))
+    send(res, result.ok === false ? 404 : 200, { ok: result.ok !== false, ...result })
+    return
+  }
+  if (req.method === 'GET' && pathname === '/agents') {
+    send(res, 200, { ok: true, agents: agentDaemon.agents() })
+    return
+  }
+  send(res, 405, { ok: false, error: 'Method not allowed.' })
+}
+
+// --------------------------------------------------------------------------
 // server
 // --------------------------------------------------------------------------
 const server = http.createServer((req, res) => {
@@ -491,6 +734,17 @@ const server = http.createServer((req, res) => {
   }
   if (req.method === 'GET' && pathname === '/system') {
     handleSystem(req, res)
+    return
+  }
+  if (req.method === 'GET' && pathname === '/mcp') {
+    handleListMcp(req, res)
+    return
+  }
+  if (req.method === 'POST' && pathname === '/mcp/call') {
+    req.setTimeout(REQUEST_TIMEOUT_MS)
+    handleMcpCall(req, res).catch((error) =>
+      send(res, 500, { ok: false, error: error instanceof Error ? error.message : String(error) }),
+    )
     return
   }
   if (req.method === 'GET' && pathname === '/fetch') {
@@ -522,6 +776,11 @@ const server = http.createServer((req, res) => {
     handleLocalFinetune(req, res)
     return
   }
+  const finetuneStatusMatch = /^\/local\/finetune\/([^/]+)$/.exec(pathname)
+  if (req.method === 'GET' && finetuneStatusMatch) {
+    handleFinetuneStatus(req, res, decodeURIComponent(finetuneStatusMatch[1]))
+    return
+  }
   if (pathname === '/registry' && (req.method === 'GET' || req.method === 'POST')) {
     handleRegistry(req, res).catch((error) =>
       send(res, 500, { ok: false, error: error instanceof Error ? error.message : String(error) }),
@@ -530,6 +789,12 @@ const server = http.createServer((req, res) => {
   }
   if (req.method === 'GET' && pathname === '/plugins') {
     handlePlugins(req, res).catch((error) =>
+      send(res, 500, { ok: false, error: error instanceof Error ? error.message : String(error) }),
+    )
+    return
+  }
+  if (pathname === '/agents' || /^\/agents\/[^/]+\/run$/.test(pathname)) {
+    handleAgents(req, res, pathname).catch((error) =>
       send(res, 500, { ok: false, error: error instanceof Error ? error.message : String(error) }),
     )
     return

@@ -32,9 +32,11 @@ code, AI models, MCP tools, RAG, memory and custom plugins.
 - [ ] **`brain run` streaming** — SSE progress from Runtime to CLI/Desktop.
 - [ ] **`brain deploy`** — publish a `.brain` to the Registry; draft
       Marketplace sync.
-- [ ] **Local fine-tune trainer** — real on-machine training backend
-      (axolotl/accelerate via a configurable trainer command) behind
-      `/local/finetune`, with job polling and logs.
+- [x] **Local fine-tune trainer** — real on-machine LoRA/QLoRA training behind
+      `/local/finetune` and the `finetune` brain node. The trainer probes the
+      host (CUDA/VRAM/libs), adapts model + method to what fits, trains with
+      transformers+peft, streams progress, and saves the adapter into the
+      workspace with `GET /local/finetune/<jobId>` polling.
 
 ## Later
 
