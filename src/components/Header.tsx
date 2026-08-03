@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { runBrain, stopBrainRun } from './canvas/executionAdapter'
 import { runBrainInCloud, stopRunInCloud } from '../core/cloud/cloudExecutor'
-import { exportBrain, shareBrain } from '../core/brainIo'
+import { exportBrain, exportBrainFile, importBrainFile, shareBrain } from '../core/brainIo'
 import { useBrainStore } from '../store/useBrainStore'
 import { useAuth } from '../core/auth/useAuth'
 import { useNavigation } from '../core/navigation'
@@ -13,6 +13,8 @@ import BrainChat from './chat/BrainChat'
 const MENU_ITEMS = [
   { id: 'projects', icon: 'lucide:layout-grid', label: 'My Projects' },
   { id: 'save', icon: 'lucide:save', label: 'Save to project' },
+  { id: 'open-file', icon: 'lucide:folder-open', label: 'Open .brain file' },
+  { id: 'export-file', icon: 'lucide:file-archive', label: 'Export as .brain' },
   { id: 'settings', icon: 'lucide:settings', label: 'Settings' },
   { id: 'docs', icon: 'lucide:file-text', label: 'Documentation' },
   { id: 'support', icon: 'lucide:life-buoy', label: 'Support' },
@@ -26,6 +28,7 @@ export default function Header() {
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [chatOpen, setChatOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const running = useBrainStore((state) => state.running)
   const { user, signOut } = useAuth()
   const { go } = useNavigation()
@@ -66,6 +69,14 @@ export default function Header() {
     if (id === 'projects') {
       setMenuOpen(false)
       go('dashboard')
+    }
+    if (id === 'open-file') {
+      setMenuOpen(false)
+      fileInputRef.current?.click()
+    }
+    if (id === 'export-file') {
+      setMenuOpen(false)
+      exportBrainFile()
     }
     if (id === 'save') {
       setMenuOpen(false)
@@ -219,6 +230,17 @@ export default function Header() {
 
       <SettingsPanel open={settingsOpen} onClose={() => setSettingsOpen(false)} />
       <BrainChat open={chatOpen} onClose={closeChat} />
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".brain,application/json"
+        className="hidden"
+        onChange={(e) => {
+          const file = e.target.files?.[0]
+          if (file) void importBrainFile(file)
+          e.target.value = ''
+        }}
+      />
     </header>
   )
 }

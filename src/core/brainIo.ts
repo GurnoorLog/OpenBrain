@@ -1,5 +1,11 @@
 import { useBrainStore } from '../store/useBrainStore'
 import type { BrainNodeSpec, Connection } from './types'
+import {
+  buildBrainFile,
+  parseBrainFile,
+  upgradeLegacyExport,
+  type BrainFile,
+} from './brain/brainFile'
 
 function serializeBrain(): { nodes: BrainNodeSpec[]; connections: Connection[] } {
   const { nodes, connections } = useBrainStore.getState()
@@ -36,6 +42,61 @@ export function exportBrain(): void {
   // synchronously with click().
   window.setTimeout(() => URL.revokeObjectURL(url), 1000)
   useBrainStore.getState().addLog('Brain exported as JSON', 'success')
+}
+
+// Downloads the current brain as a first-class .brain project file.
+export function exportBrainFile(): void {
+  const store = useBrainStore.getState()
+  const file = buildBrainFile(
+    {
+      nodes: serializeBrain().nodes,
+      connections: serializeBrain().connections,
+    },
+    { name: store.projectName ?? undefined },
+  )
+  const blob = new Blob([JSON.stringify(file, null, 2)], {
+    type: 'application/vnd.openbrain.brain+json',
+  })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  const slug = (file.name || 'brain').trim().toLowerCase().replace(/[^a-z0-9-_]+/g, '-')
+  link.href = url
+  link.download = `${slug || 'brain'}.brain`
+  link.click()
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000)
+  store.addLog(`Brain exported as ${link.download}`, 'success')
+}
+
+// Opens a .brain file (or a legacy brain.json export) from the disk and loads
+// it into the canvas. Returns true on success.
+export async function importBrainFile(file: File): Promise<boolean> {
+  const store = useBrainStore.getState()
+  try {
+    const raw = await file.text()
+    const parsed = parseBrainFile(raw)
+    const target = parsed.problems.length > 0 ? upgradeLegacyExport(JSON.parse(raw)) : parsed.file
+    if (!target) {
+      store.addLog(`Cannot open "${file.name}": invalid .brain file`, 'error')
+      return false
+    }
+    applyBrainFile(target)
+    store.addLog(`Opened ${file.name} (${parsed.problems.length} warnings)`, 'success')
+    return true
+  } catch (error) {
+    store.addLog(
+      `Cannot open "${file.name}": ${error instanceof Error ? error.message : String(error)}`,
+      'error',
+    )
+    return false
+  }
+}
+
+export function applyBrainFile(file: BrainFile): void {
+  useBrainStore.getState().setBrain({
+    nodes: [...file.graph.nodes],
+    connections: [...file.graph.connections],
+  })
+  if (file.name) useBrainStore.getState().setBrainTitle(file.name)
 }
 
 // Copies a full shareable URL (#brain=...) to the clipboard. Anyone opening

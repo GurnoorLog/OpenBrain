@@ -1,0 +1,16 @@
+{
+  "name": "openbrain-cli",
+  "version": "0.1.0",
+  "description": "OpenBrain CLI — init, open, run, export, validate, doctor, plugins, logs",
+  "bin": {
+    "brain": "./brain.js"
+  },
+  "main": "brain.js",
+  "scripts": {
+    "start": "node brain.js help"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {}
+}

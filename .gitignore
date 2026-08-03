@@ -29,3 +29,8 @@ dist-ssr
 *.sw?
 
 .vercel
+
+# Local-first user data (self-hosted runtime)
+workspace
+registry
+runtime/.runtime-cache

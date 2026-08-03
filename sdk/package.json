@@ -1,0 +1,13 @@
+{
+  "name": "openbrain-sdk",
+  "version": "0.1.0",
+  "description": "OpenBrain SDK — .brain files, plugins, and Runtime client for building on top of OpenBrain",
+  "main": "index.js",
+  "exports": {
+    ".": "./index.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {}
+}

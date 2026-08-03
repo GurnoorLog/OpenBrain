@@ -1,16 +1,66 @@
-# React + Vite
+# OpenBrain — the local-first AI development platform
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+Design AI "brains" as visual graphs, or just describe one in a sentence and the
+AI Architect builds it. Brains execute with real tool nodes (GitHub, Hacker
+News, web fetch), memory across runs, LLM synthesis, reports and a built-in
+chat. Self-host it, and everything runs on **your** machine — your data, your
+models, your keys.
 
-Currently, two official plugins are available:
+## Quick start (self-hosted)
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+```bash
+cp .env.example .env    # optional keys; local features need none
+docker compose up -d    # OpenBrain Desktop + Runtime + Ollama
+# open http://localhost:8080
+```
 
-## React Compiler
+Optional services:
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+```bash
+docker compose --profile infra up -d    # + PostgreSQL, Redis, Qdrant
+docker compose --profile mcp up -d      # + MCP Gateway
+docker compose --profile supabase up -d # + Supabase DB
+```
 
-## Expanding the Oxlint configuration
+## Local development
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and Oxlint's TypeScript related rules in your project.
+```bash
+npm install
+npm run dev        # Vite dev server (browser execution, cloud fallback)
+npm run build      # typecheck + production build
+```
+
+Run the Runtime + CLI locally without Docker:
+
+```bash
+node runtime/server.js      # serves ./dist + local APIs on :8080
+node cli/brain.js doctor
+node cli/brain.js init && node cli/brain.js run my-brain.brain --message "hello"
+```
+
+## The platform
+
+- **Desktop** (`src/`) — visual canvas, AI Architect, chat, reports.
+- **Runtime** (`runtime/`) — local engine: `/run`, `/composio`, `/fetch`,
+  `/local/files`, `/local/finetune`, `/registry`, `/plugins`, `/system`.
+- **CLI** (`cli/`) — `brain init / open / run / export / validate / doctor /
+  plugins / logs`.
+- **SDK** (`sdk/`) — `.brain` files + plugin API for developers.
+- **`.brain` files** — first-class project files (import/export in the app).
+- **Plugins** (`plugins/`) — custom nodes, providers, MCP connectors.
+
+See `ARCHITECTURE.md` and `ROADMAP.md` for the full picture.
+
+## Node types
+
+`llm` · `local` (in-browser, no key) · `memory` · `planner` · `browser` ·
+`github` · `mcp` · `filesystem` · `python` · `rag` · `finetune` · `news` ·
+`imagegen` · `output` · `agent` · `subbrain` · `trigger` · `gate` · `tool`
+
+## Keys (all optional)
+
+| Key | Purpose |
+| --- | --- |
+| `FIREWORKS_API_KEY` | LLM nodes + AI Architect (cloud models) |
+| `OLLAMA_URL` | Local models (no key) |
+| `COMPOSIO_API_KEY` + `COMPOSIO_ACCOUNT_ID` + `COMPOSIO_ENTITY_ID` | GitHub / MCP tool nodes |
