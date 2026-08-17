@@ -117,8 +117,9 @@ The script will:
 2. Ask for your API key (or skip for local-only mode)
 3. Build and start the stack
 4. Pull the local LLM model (~3GB, one-time)
-
-When it says **"OpenBrain is ready!"**, open **http://127.0.0.1:8080** in your browser.
+5. Ask: **"Guide me"** or **"I know what I'm doing"**
+   - **Guide me** — walks you through creating your first brain, testing it in the app, running it in the terminal, and exporting it
+   - **Just open the app** — launches the browser and you're on your own
 
 ### What you can do in the app
 
