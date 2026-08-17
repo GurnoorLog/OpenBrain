@@ -139,7 +139,7 @@ if ($useOllama) {
 
         Write-Host -NoNewline "  [4/4] Starting OpenBrain stack...    "
         $ErrorActionPreference = "Continue"
-        docker compose up -d --build 2>&1 | Out-Null
+        docker compose up -d 2>&1 | Out-Null
         $ErrorActionPreference = "Stop"
         Write-Host "OK" -ForegroundColor Green
 
@@ -176,7 +176,7 @@ if ($useOllama) {
         Write-Host ""
         Write-Host -NoNewline "  [4/4] Starting OpenBrain stack...    "
         $ErrorActionPreference = "Continue"
-        docker compose up -d --build 2>&1 | Out-Null
+        docker compose up -d 2>&1 | Out-Null
         $ErrorActionPreference = "Stop"
         Write-Host "OK" -ForegroundColor Green
     }
@@ -208,7 +208,7 @@ if ($useOllama) {
     Write-Host ""
     Write-Host -NoNewline "  [4/4] Starting OpenBrain stack...    "
     $ErrorActionPreference = "Continue"
-    docker compose up -d --build 2>&1 | Out-Null
+    docker compose up -d 2>&1 | Out-Null
     $ErrorActionPreference = "Stop"
     Write-Host "OK" -ForegroundColor Green
 
@@ -291,7 +291,7 @@ if ($walkChoice -eq "1") {
     Write-Host "  Building the terminal interface..." -ForegroundColor White
     Push-Location tui
     npm install 2>&1 | Out-Null
-    npm run build 2>&1 | Out-Null
+    npm run build *>$null
     Pop-Location
     Write-Host "  TUI built!" -ForegroundColor Green
     Write-Host ""
@@ -321,6 +321,14 @@ if ($walkChoice -eq "1") {
     Write-Host "    Run in TUI:     node tui\dist\cli.js <file>.brain" -ForegroundColor White
     Write-Host "    Stop:           docker compose down" -ForegroundColor White
     Write-Host "    Restart:        docker compose up -d" -ForegroundColor White
+    Write-Host ""
+    Write-Host "  ------------------------------------------" -ForegroundColor Magenta
+    Write-Host ""
+    Write-Host "  Also check out:" -ForegroundColor White
+    Write-Host "    Landing page:  https://openbrain.dev" -ForegroundColor Cyan
+    Write-Host "    Sign in:       https://openbrain.dev/auth" -ForegroundColor Cyan
+    Write-Host ""
+    Write-Host "  ------------------------------------------" -ForegroundColor Magenta
     Write-Host ""
 
 } else {

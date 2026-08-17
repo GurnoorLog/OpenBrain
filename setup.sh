@@ -138,7 +138,7 @@ if [ "$LLM_CHOICE" != "2" ]; then
     echo ""
 
     echo -ne "  ${D}[4/4]${N} Starting OpenBrain stack...    "
-    docker compose up -d --build 2>&1 | tail -1 | tr -d '\n'
+    docker compose up -d 2>&1 | tail -1 | tr -d '\n'
     echo -e " ${G}OK${N}"
 
     echo ""
@@ -173,7 +173,7 @@ if [ "$LLM_CHOICE" != "2" ]; then
     # Start stack
     echo ""
     echo -ne "  ${D}[4/4]${N} Starting OpenBrain stack...    "
-    docker compose up -d --build 2>&1 | tail -1 | tr -d '\n'
+    docker compose up -d 2>&1 | tail -1 | tr -d '\n'
     echo -e " ${G}OK${N}"
   fi
 
@@ -206,7 +206,7 @@ else
 
   echo ""
   echo -ne "  ${D}[4/4]${N} Starting OpenBrain stack...    "
-  docker compose up -d --build 2>&1 | tail -1 | tr -d '\n'
+  docker compose up -d 2>&1 | tail -1 | tr -d '\n'
   echo -e " ${G}OK${N}"
 
 fi
@@ -287,7 +287,7 @@ BRAIN_EOF
   echo ""
 
   echo -e "  ${W}Building the terminal interface...${N}"
-  (cd tui && npm install > /dev/null 2>&1 && npm run build > /dev/null 2>&1)
+  (cd tui && npm install > /dev/null 2>&1 && npm run build 2>/dev/null)
   echo -e "  ${G}TUI built!${N}"
   echo ""
 
@@ -317,6 +317,14 @@ BRAIN_EOF
   echo -e "    ${W}Run in TUI:     node tui/dist/cli.js <file>.brain${N}"
   echo -e "    ${W}Stop:           docker compose down${N}"
   echo -e "    ${W}Restart:        docker compose up -d${N}"
+  echo ""
+  echo -e "  ${Y}------------------------------------------${N}"
+  echo ""
+  echo -e "  ${W}Also check out:${N}"
+  echo -e "    ${C}Landing page:  https://openbrain.dev${N}"
+  echo -e "    ${C}Sign in:       https://openbrain.dev/auth${N}"
+  echo ""
+  echo -e "  ${Y}------------------------------------------${N}"
   echo ""
 
 else
