@@ -27,9 +27,15 @@ const promptBuilder = new PromptBuilder()
 // local option. Until the providers implement invokeModel, design() throws
 // ArchitectProviderNotImplementedError and the adapter falls back to the
 // offline draft generator.
+function getOllamaBaseUrl(): string {
+  const runtimeUrl = (import.meta as { env?: Record<string, string | undefined> }).env
+    ?.VITE_RUNTIME_URL as string | undefined
+  const base = runtimeUrl || window.location.origin
+  return `${base.replace(/\/+$/, '')}/ollama`
+}
 const providers: Readonly<Record<ProviderId, ArchitectProvider>> = {
   fireworks: new FireworksArchitect(promptBuilder, validator),
-  ollama: new OllamaArchitect(promptBuilder, validator),
+  ollama: new OllamaArchitect(promptBuilder, validator, { baseUrl: getOllamaBaseUrl(), timeoutMs: 120_000 }),
 }
 
 const architect = new Architect({

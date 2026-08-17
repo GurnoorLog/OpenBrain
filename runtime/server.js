@@ -680,6 +680,37 @@ async function handleSystem(req, res) {
 }
 
 // --------------------------------------------------------------------------
+// /ollama — proxy to the local Ollama server (avoids browser CORS issues)
+// --------------------------------------------------------------------------
+
+const OLLAMA_BASE = process.env.OLLAMA_URL || 'http://127.0.0.1:11434'
+
+async function handleOllamaProxy(req, res) {
+  const ollamaPath = req.url.replace(/^\/ollama/, '') || '/'
+  const target = `${OLLAMA_BASE}${ollamaPath}`
+  const body = req.method === 'POST' ? await readBody(req, 10 * 1024 * 1024) : null
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), 120000)
+  try {
+    const response = await fetch(target, {
+      method: req.method,
+      headers: {
+        'Content-Type': req.headers['content-type'] || 'application/json',
+      },
+      body: body || undefined,
+      signal: controller.signal,
+    })
+    const text = await response.text()
+    res.writeHead(response.status, { 'Content-Type': 'application/json' })
+    res.end(text)
+  } catch (error) {
+    send(res, 502, { ok: false, error: error instanceof Error ? error.message : String(error) })
+  } finally {
+    clearTimeout(timeout)
+  }
+}
+
+// --------------------------------------------------------------------------
 // /agents — the agent daemon turns .brain files with an `agent` block into
 // scheduled autonomous agents. It scans the registry each minute and runs due
 // brains through the shared executeBrain core. Worker nodes inside those brains
@@ -750,6 +781,13 @@ const server = http.createServer((req, res) => {
   if (req.method === 'GET' && pathname === '/fetch') {
     req.setTimeout(20000)
     handleFetch(req, res)
+    return
+  }
+  if (pathname.startsWith('/ollama')) {
+    req.setTimeout(120000)
+    handleOllamaProxy(req, res).catch((error) =>
+      send(res, 500, { ok: false, error: error instanceof Error ? error.message : String(error) }),
+    )
     return
   }
   if (req.method === 'POST' && pathname === '/run') {
