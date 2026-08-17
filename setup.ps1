@@ -259,9 +259,43 @@ if ($walkChoice -eq "1") {
     Write-Host "  Now click the Export button in the top-right corner." -ForegroundColor Yellow
     Write-Host "  It saves a .brain file to your Downloads folder." -ForegroundColor DarkGray
     Write-Host ""
-    Write-Host "  After exporting, run this command:" -ForegroundColor Yellow
+    Read-Host "  Press Enter when you have exported the .brain file"
+
     Write-Host ""
-    Write-Host "    node tui\dist\cli.js $HOME\Downloads\<filename>.brain" -ForegroundColor White
+    Write-Host "  Where did the .brain file save? (default: Downloads)" -ForegroundColor Yellow
+    Write-Host "  Just type the filename, e.g. my-agent.brain" -ForegroundColor DarkGray
+    $brainFile = Read-Host "  Filename"
+    if (-not $brainFile) {
+        $brainFile = (Get-ChildItem "$HOME\Downloads\*.brain" | Sort-Object LastWriteTime -Descending | Select-Object -First 1).Name
+    }
+    $brainPath = "$HOME\Downloads\$brainFile"
+    if (-not (Test-Path $brainPath)) {
+        Write-Host ""
+        Write-Host "  File not found at: $brainPath" -ForegroundColor Red
+        Write-Host "  Check your Downloads folder and type the full path." -ForegroundColor DarkGray
+        $brainPath = Read-Host "  Full path to .brain file"
+    }
+
+    Write-Host ""
+    Write-Host "  Found: $brainPath" -ForegroundColor Green
+
+    Write-Host ""
+    Write-Host "  Now open a NEW terminal window and run:" -ForegroundColor Yellow
+    Write-Host ""
+    Write-Host "    cd $PWD" -ForegroundColor White
+    Write-Host "    node tui\dist\cli.js `"$brainPath`"" -ForegroundColor White
+    Write-Host ""
+    Write-Host "  Or try it with a question:" -ForegroundColor DarkGray
+    Write-Host ""
+    Write-Host "    node tui\dist\cli.js `"$brainPath`" --once `"Analyze Nike marketing`"" -ForegroundColor White
+    Write-Host ""
+
+    Write-Host "  Building the terminal interface..." -ForegroundColor White
+    Push-Location tui
+    npm install 2>&1 | Out-Null
+    npm run build *>$null
+    Pop-Location
+    Write-Host "  TUI built!" -ForegroundColor Green
     Write-Host ""
     Read-Host "  Press Enter when you have tried the TUI"
 

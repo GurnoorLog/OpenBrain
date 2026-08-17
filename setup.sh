@@ -260,9 +260,40 @@ if [ "$WALK_CHOICE" = "1" ]; then
   echo -e "  ${Y}Now click the Export button in the top-right corner.${N}"
   echo -e "  ${D}It saves a .brain file to your Downloads folder.${N}"
   echo ""
-  echo -e "  ${Y}After exporting, run this command:${N}"
+  read -rp "  Press Enter when you have exported the .brain file > " _
+
   echo ""
-  echo -e "    ${W}node tui/dist/cli.js ~/Downloads/<filename>.brain${N}"
+  echo -e "  ${Y}Where did the .brain file save? (default: Downloads)${N}"
+  echo -e "  ${D}Just type the filename, e.g. my-agent.brain${N}"
+  read -rp "  Filename > " BRAIN_FILE
+  if [ -z "$BRAIN_FILE" ]; then
+    BRAIN_FILE=$(ls -t ~/Downloads/*.brain 2>/dev/null | head -1 | xargs basename)
+  fi
+  BRAIN_PATH="$HOME/Downloads/$BRAIN_FILE"
+  if [ ! -f "$BRAIN_PATH" ]; then
+    echo ""
+    echo -e "  ${R}File not found at: $BRAIN_PATH${N}"
+    echo -e "  ${D}Check your Downloads folder and type the full path.${N}"
+    read -rp "  Full path to .brain file > " BRAIN_PATH
+  fi
+
+  echo ""
+  echo -e "  ${G}Found: $BRAIN_PATH${N}"
+
+  echo ""
+  echo -e "  ${Y}Now open a NEW terminal window and run:${N}"
+  echo ""
+  echo -e "    ${W}cd $(pwd)${N}"
+  echo -e "    ${W}node tui/dist/cli.js \"$BRAIN_PATH\"${N}"
+  echo ""
+  echo -e "  ${D}Or try it with a question:${N}"
+  echo ""
+  echo -e "    ${W}node tui/dist/cli.js \"$BRAIN_PATH\" --once \"Analyze Nike marketing\"${N}"
+  echo ""
+
+  echo -e "  ${W}Building the terminal interface...${N}"
+  (cd tui && npm install > /dev/null 2>&1 && npm run build 2>/dev/null)
+  echo -e "  ${G}TUI built!${N}"
   echo ""
   read -rp "  Press Enter when you have tried the TUI > " _
 
