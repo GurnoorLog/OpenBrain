@@ -139,7 +139,7 @@ if ($useOllama) {
 
         Write-Host -NoNewline "  [4/4] Starting OpenBrain stack...    "
         $ErrorActionPreference = "Continue"
-        docker compose up -d --build 2>&1 | Out-Null
+        docker compose up -d 2>&1 | Out-Null
         $ErrorActionPreference = "Stop"
         Write-Host "OK" -ForegroundColor Green
 
@@ -176,7 +176,7 @@ if ($useOllama) {
         Write-Host ""
         Write-Host -NoNewline "  [4/4] Starting OpenBrain stack...    "
         $ErrorActionPreference = "Continue"
-        docker compose up -d --build 2>&1 | Out-Null
+        docker compose up -d 2>&1 | Out-Null
         $ErrorActionPreference = "Stop"
         Write-Host "OK" -ForegroundColor Green
     }
@@ -208,7 +208,7 @@ if ($useOllama) {
     Write-Host ""
     Write-Host -NoNewline "  [4/4] Starting OpenBrain stack...    "
     $ErrorActionPreference = "Continue"
-    docker compose up -d --build 2>&1 | Out-Null
+    docker compose up -d 2>&1 | Out-Null
     $ErrorActionPreference = "Stop"
     Write-Host "OK" -ForegroundColor Green
 
@@ -283,7 +283,7 @@ if ($walkChoice -eq "1") {
     Write-Host "    Create brains:  http://127.0.0.1:8080" -ForegroundColor Cyan
     Write-Host "    Run in TUI:     node tui\dist\cli.js <file>.brain" -ForegroundColor White
     Write-Host "    Stop:           docker compose down" -ForegroundColor White
-    Write-Host "    Restart:        docker compose up -d --build" -ForegroundColor White
+    Write-Host "    Restart:        docker compose up -d" -ForegroundColor White
     Write-Host ""
     Write-Host "  ------------------------------------------" -ForegroundColor Magenta
     Write-Host ""
@@ -306,7 +306,7 @@ if ($walkChoice -eq "1") {
     Write-Host "    Create brains:  http://127.0.0.1:8080" -ForegroundColor DarkGray
     Write-Host "    Run in TUI:     node tui\dist\cli.js <file>.brain" -ForegroundColor DarkGray
     Write-Host "    Stop:           docker compose down" -ForegroundColor DarkGray
-    Write-Host "    Restart:        docker compose up -d --build" -ForegroundColor DarkGray
+    Write-Host "    Restart:        docker compose up -d" -ForegroundColor DarkGray
     Write-Host ""
 
 }

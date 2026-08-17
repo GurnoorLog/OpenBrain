@@ -19,9 +19,7 @@ services:
   # local .brain registry, and run local fine-tunes.
   # --------------------------------------------------------------------------
   runtime:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: praknoor/openbrain-runtime:0.1.2
     container_name: openbrain-runtime
     ports:
       - "${OPENBRAIN_PORT:-8080}:8080"

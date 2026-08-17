@@ -138,7 +138,7 @@ if [ "$LLM_CHOICE" != "2" ]; then
     echo ""
 
     echo -ne "  ${D}[4/4]${N} Starting OpenBrain stack...    "
-    docker compose up -d --build 2>&1 | tail -1 | tr -d '\n'
+    docker compose up -d 2>&1 | tail -1 | tr -d '\n'
     echo -e " ${G}OK${N}"
 
     echo ""
@@ -173,7 +173,7 @@ if [ "$LLM_CHOICE" != "2" ]; then
     # Start stack
     echo ""
     echo -ne "  ${D}[4/4]${N} Starting OpenBrain stack...    "
-    docker compose up -d --build 2>&1 | tail -1 | tr -d '\n'
+    docker compose up -d 2>&1 | tail -1 | tr -d '\n'
     echo -e " ${G}OK${N}"
   fi
 
@@ -206,7 +206,7 @@ else
 
   echo ""
   echo -ne "  ${D}[4/4]${N} Starting OpenBrain stack...    "
-  docker compose up -d --build 2>&1 | tail -1 | tr -d '\n'
+  docker compose up -d 2>&1 | tail -1 | tr -d '\n'
   echo -e " ${G}OK${N}"
 
 fi
@@ -284,7 +284,7 @@ if [ "$WALK_CHOICE" = "1" ]; then
   echo -e "    ${C}Create brains:  http://127.0.0.1:8080${N}"
   echo -e "    ${W}Run in TUI:     node tui/dist/cli.js <file>.brain${N}"
   echo -e "    ${W}Stop:           docker compose down${N}"
-  echo -e "    ${W}Restart:        docker compose up -d --build${N}"
+  echo -e "    ${W}Restart:        docker compose up -d${N}"
   echo ""
   echo -e "  ${Y}------------------------------------------${N}"
   echo ""
@@ -311,7 +311,7 @@ else
   echo -e "    ${D}Create brains:  http://127.0.0.1:8080${N}"
   echo -e "    ${D}Run in TUI:     node tui/dist/cli.js <file>.brain${N}"
   echo -e "    ${D}Stop:           docker compose down${N}"
-  echo -e "    ${D}Restart:        docker compose up -d --build${N}"
+  echo -e "    ${D}Restart:        docker compose up -d${N}"
   echo ""
 
 fi
