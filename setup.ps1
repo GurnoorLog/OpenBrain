@@ -293,7 +293,10 @@ if ($walkChoice -eq "1") {
     Write-Host "  Building the terminal interface..." -ForegroundColor White
     Push-Location tui
     npm install 2>&1 | Out-Null
-    npm run build *>$null
+    $prevEAP = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    npm run build 2>&1 | Out-Null
+    $ErrorActionPreference = $prevEAP
     Pop-Location
     Write-Host "  TUI built!" -ForegroundColor Green
     Write-Host ""
