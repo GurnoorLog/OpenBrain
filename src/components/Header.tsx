@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { runBrain, stopBrainRun } from './canvas/executionAdapter'
 import { runBrainInCloud, stopRunInCloud } from '../core/cloud/cloudExecutor'
-import { exportBrain, exportBrainFile, importBrainFile, shareBrain } from '../core/brainIo'
+import { exportBrainFile, importBrainFile, shareBrain } from '../core/brainIo'
 import { useBrainStore } from '../store/useBrainStore'
 import { useAuth } from '../core/auth/useAuth'
 import { useNavigation } from '../core/navigation'
