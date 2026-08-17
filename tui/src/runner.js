@@ -67,7 +67,7 @@ async function isReachable(baseUrl) {
 export async function createRunner({ brain, runtimeUrl, forceLocal, knowledgeDir, mcpConfigPath }) {
   const core = resolveBrainCore()
   const mcpClient = resolveMcpClient()
-  const requested = (runtimeUrl || process.env.OPENBRAIN_RUNTIME_URL || 'http://localhost:8080').replace(/\/+$/, '')
+  const requested = (runtimeUrl || process.env.OPENBRAIN_RUNTIME_URL || 'http://127.0.0.1:8080').replace(/\/+$/, '')
   const knowledgePath =
     knowledgeDir || process.env.OPENBRAIN_KNOWLEDGE_DIR || process.env.KNOWLEDGE_DIR || path.join(process.cwd(), 'knowledge')
   const mcpConfig = mcpClient
