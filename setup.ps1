@@ -80,7 +80,9 @@ if ($ApiKey) {
 # --- Build and start ---
 Write-Host ""
 Write-Host -NoNewline "  [5/5] Building and starting stack...   "
+$ErrorActionPreference = "Continue"
 docker compose up -d --build 2>&1 | Out-Null
+$ErrorActionPreference = "Stop"
 Write-Host "OK" -ForegroundColor Green
 
 # --- Pull Ollama model ---
