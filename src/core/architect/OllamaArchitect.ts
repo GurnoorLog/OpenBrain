@@ -5,7 +5,7 @@ import type { ModelResult } from './ArchitectProvider'
 import type { PromptBuilder, StructuredPrompt } from './PromptBuilder'
 import type { SpecificationValidator } from './SpecificationValidator'
 
-export const OLLAMA_BASE_URL = 'http://localhost:11434'
+export const OLLAMA_BASE_URL = 'http://127.0.0.1:11434'
 export const OLLAMA_DEFAULT_MODEL = 'qwen2.5:7b'
 
 export interface OllamaArchitectOptions {

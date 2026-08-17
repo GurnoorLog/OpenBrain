@@ -29,7 +29,7 @@ export const DEFAULT_LOCAL_PROVIDER: ProviderConfiguration = {
   providerName: 'Ollama',
   providerType: 'local',
   model: 'qwen2.5:7b',
-  baseUrl: 'http://localhost:11434',
+  baseUrl: 'http://127.0.0.1:11434',
   apiKey: null,
   temperature: 0.7,
   maxTokens: 2048,
