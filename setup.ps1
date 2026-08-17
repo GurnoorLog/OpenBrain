@@ -4,12 +4,9 @@
 $ErrorActionPreference = "Stop"
 
 Write-Host ""
-Write-Host "  ____                          ____  _  __" -ForegroundColor Cyan
-Write-Host " | __ )  __ _ _ __   __ _ _   _ | __ )| |/ /" -ForegroundColor Cyan
-Write-Host " |  _ \ / _` | '_ \ / _` | | | ||  _ \ ' / " -ForegroundColor Cyan
-Write-Host " | |_) | (_| | | | | (_| | |_| || |_) | . \ " -ForegroundColor Cyan
-Write-Host " |____/ \__,_|_| |_|\__,_|\__, ||____/|_|\_\" -ForegroundColor Cyan
-Write-Host "                          |___/             " -ForegroundColor Cyan
+Write-Host "  ==========================================" -ForegroundColor Cyan
+Write-Host "            O P E N B R A I N" -ForegroundColor Cyan
+Write-Host "  ==========================================" -ForegroundColor Cyan
 Write-Host ""
 Write-Host "  build your own mind" -ForegroundColor White
 Write-Host "  local-first AI agent platform" -ForegroundColor DarkGray
@@ -239,35 +236,53 @@ if ($walkChoice -eq "1") {
 
     Write-Host ""
     Write-Host "  ------------------------------------------" -ForegroundColor Cyan
-    Write-Host "  STEP 1 / 3 : CREATE A BRAIN" -ForegroundColor Cyan
+    Write-Host "  STEP 1 / 3 : CREATING DEMO BRAIN" -ForegroundColor Cyan
     Write-Host "  ------------------------------------------" -ForegroundColor Cyan
     Write-Host ""
 
-    Write-Host "  Opening OpenBrain in your browser..." -ForegroundColor White
-    Start-Process "http://127.0.0.1:8080"
+    Write-Host "  Generating a demo brain for you..." -ForegroundColor White
+    $demoBrain = @"
+{
+  "app": "OpenBrain",
+  "version": 1,
+  "name": "Market Research Agent",
+  "exportedAt": "2026-01-01T00:00:00.000Z",
+  "graph": {
+    "nodes": [
+      {
+        "id": "input-1",
+        "type": "input",
+        "x": 100,
+        "y": 200,
+        "content": "You are a market research analyst. Analyze the given company and provide 5 specific, actionable marketing improvement ideas."
+      },
+      {
+        "id": "llm-1",
+        "type": "llm",
+        "x": 400,
+        "y": 200,
+        "content": "Analyze this company and give 5 marketing improvement ideas.",
+        "model": "ollama"
+      },
+      {
+        "id": "output-1",
+        "type": "output",
+        "x": 700,
+        "y": 200,
+        "content": "Format the ideas as a numbered list with a brief explanation for each."
+      }
+    ],
+    "connections": [
+      { "from": "input-1", "to": "llm-1" },
+      { "from": "llm-1", "to": "output-1" }
+    ]
+  }
+}
+"@
+    Set-Content -Path "demo.brain" -Value $demoBrain -Encoding UTF8
+    Write-Host "  Created: demo.brain" -ForegroundColor Green
     Write-Host ""
 
-    Write-Host "  You should see a blank canvas and a chat box at the bottom." -ForegroundColor White
-    Write-Host ""
-    Write-Host "  Type this into the chat:" -ForegroundColor Yellow
-    Write-Host ""
-    Write-Host "  > Create a market research agent that analyzes a company" -ForegroundColor White
-    Write-Host "  > and gives them 5 improvement ideas for their marketing." -ForegroundColor White
-    Write-Host ""
-    Write-Host "  Press Enter and watch the AI Architect build your brain!" -ForegroundColor DarkGray
-    Write-Host ""
-    Read-Host "  Press Enter when your brain is built and visible on the canvas"
-
-    Write-Host ""
-    Write-Host "  Nice! Your brain is created." -ForegroundColor Green
-    Write-Host ""
-
-    Write-Host "  Now export it: click the Export button in the top-right corner." -ForegroundColor Yellow
-    Write-Host "  It saves a .brain file to your Downloads folder." -ForegroundColor DarkGray
-    Write-Host ""
-    Read-Host "  Press Enter when you have exported the .brain file"
-
-    Write-Host ""
     Write-Host "  ------------------------------------------" -ForegroundColor Cyan
     Write-Host "  STEP 2 / 3 : RUN IT IN THE TERMINAL (TUI)" -ForegroundColor Cyan
     Write-Host "  ------------------------------------------" -ForegroundColor Cyan
@@ -281,16 +296,11 @@ if ($walkChoice -eq "1") {
     Write-Host "  TUI built!" -ForegroundColor Green
     Write-Host ""
 
-    Write-Host "  Now run this command in a NEW terminal window:" -ForegroundColor Yellow
+    Write-Host "  Run this command:" -ForegroundColor Yellow
     Write-Host ""
-    Write-Host "    cd $PWD" -ForegroundColor White
-    Write-Host "    node tui\dist\cli.js create-a-market-research-agent-.brain" -ForegroundColor White
+    Write-Host "    node tui\dist\cli.js demo.brain --once `"Analyze Nike marketing`"" -ForegroundColor White
     Write-Host ""
-    Write-Host "  Or run it one-shot (no interactive chat):" -ForegroundColor DarkGray
-    Write-Host ""
-    Write-Host '    node tui\dist\cli.js create-a-market-research-agent-.brain --once "Analyze Nike marketing"' -ForegroundColor White
-    Write-Host ""
-    Read-Host "  Press Enter when you have tried the TUI"
+    Read-Host "  Press Enter when you have tried it"
 
     Write-Host ""
     Write-Host "  ------------------------------------------" -ForegroundColor Cyan
@@ -298,16 +308,10 @@ if ($walkChoice -eq "1") {
     Write-Host "  ------------------------------------------" -ForegroundColor Cyan
     Write-Host ""
     Write-Host "  You now know how to:" -ForegroundColor White
-    Write-Host "    1. Create a brain with the AI Architect (browser)" -ForegroundColor White
-    Write-Host "    2. Export it as a .brain file" -ForegroundColor White
-    Write-Host "    3. Run any .brain file in the terminal with the TUI" -ForegroundColor White
+    Write-Host "    1. Run any .brain file with: node tui\dist\cli.js <file>.brain" -ForegroundColor White
+    Write-Host "    2. Create your own brains at: http://127.0.0.1:8080" -ForegroundColor White
+    Write-Host "    3. Export them as .brain files to share" -ForegroundColor White
     Write-Host ""
-    Write-Host "  Your .brain files are portable:" -ForegroundColor DarkGray
-    Write-Host "    - Share them with anyone who has OpenBrain" -ForegroundColor DarkGray
-    Write-Host "    - Run them on any machine: node tui\dist\cli.js <file>.brain" -ForegroundColor DarkGray
-    Write-Host "    - Check them into git" -ForegroundColor DarkGray
-    Write-Host ""
-
     Write-Host "  ------------------------------------------" -ForegroundColor Green
     Write-Host ""
     Write-Host "  You are all set!" -ForegroundColor Green

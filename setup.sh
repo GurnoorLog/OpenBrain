@@ -13,13 +13,9 @@ D='\033[2m'
 N='\033[0m'
 
 echo ""
-echo -e "${C}"
-echo "  ____                          ____  _  __"
-echo " | __ )  __ _ _ __   __ _ _   _ | __ )| |/ /"
-echo " |  _ \ / _\` | '_ \ / _\` | | | ||  _ \ ' / "
-echo " | |_) | (_| | | | | (_| | |_| || |_) | . \ "
-echo " |____/ \__,_|_| |_|\__,_|\__, ||____/|_|\_\\"
-echo "                          |___/             "
+echo -e "${C}=========================================="
+echo "            O P E N B R A I N"
+echo -e "==========================================${N}"
 echo ""
 echo -e "${W}  build your own mind${N}"
 echo -e "${D}  local-first AI agent platform${N}"
@@ -237,39 +233,54 @@ if [ "$WALK_CHOICE" = "1" ]; then
 
   echo ""
   echo -e "  ${C}------------------------------------------${N}"
-  echo -e "  ${C}STEP 1 / 3 : CREATE A BRAIN${N}"
+  echo -e "  ${C}STEP 1 / 3 : CREATING DEMO BRAIN${N}"
   echo -e "  ${C}------------------------------------------${N}"
   echo ""
 
-  echo -e "  ${W}Opening OpenBrain in your browser...${N}"
-  if command -v open &> /dev/null; then
-    open "http://127.0.0.1:8080"
-  elif command -v xdg-open &> /dev/null; then
-    xdg-open "http://127.0.0.1:8080"
-  fi
+  echo -e "  ${W}Generating a demo brain for you...${N}"
+
+  cat > demo.brain << 'BRAIN_EOF'
+{
+  "app": "OpenBrain",
+  "version": 1,
+  "name": "Market Research Agent",
+  "exportedAt": "2026-01-01T00:00:00.000Z",
+  "graph": {
+    "nodes": [
+      {
+        "id": "input-1",
+        "type": "input",
+        "x": 100,
+        "y": 200,
+        "content": "You are a market research analyst. Analyze the given company and provide 5 specific, actionable marketing improvement ideas."
+      },
+      {
+        "id": "llm-1",
+        "type": "llm",
+        "x": 400,
+        "y": 200,
+        "content": "Analyze this company and give 5 marketing improvement ideas.",
+        "model": "ollama"
+      },
+      {
+        "id": "output-1",
+        "type": "output",
+        "x": 700,
+        "y": 200,
+        "content": "Format the ideas as a numbered list with a brief explanation for each."
+      }
+    ],
+    "connections": [
+      { "from": "input-1", "to": "llm-1" },
+      { "from": "llm-1", "to": "output-1" }
+    ]
+  }
+}
+BRAIN_EOF
+
+  echo -e "  ${G}Created: demo.brain${N}"
   echo ""
 
-  echo -e "  You should see a blank canvas and a chat box at the bottom."
-  echo ""
-  echo -e "  ${Y}Type this into the chat:${N}"
-  echo ""
-  echo -e "  ${W}> Create a market research agent that analyzes a company${N}"
-  echo -e "  ${W}> and gives them 5 improvement ideas for their marketing.${N}"
-  echo ""
-  echo -e "  ${D}Press Enter and watch the AI Architect build your brain!${N}"
-  echo ""
-  read -rp "  Press Enter when your brain is built > " _
-
-  echo ""
-  echo -e "  ${G}Nice! Your brain is created.${N}"
-  echo ""
-
-  echo -e "  Now export it: click the Export button in the top-right corner."
-  echo -e "  ${D}It saves a .brain file to your Downloads folder.${N}"
-  echo ""
-  read -rp "  Press Enter when you have exported the .brain file > " _
-
-  echo ""
   echo -e "  ${C}------------------------------------------${N}"
   echo -e "  ${C}STEP 2 / 3 : RUN IT IN THE TERMINAL (TUI)${N}"
   echo -e "  ${C}------------------------------------------${N}"
@@ -280,16 +291,11 @@ if [ "$WALK_CHOICE" = "1" ]; then
   echo -e "  ${G}TUI built!${N}"
   echo ""
 
-  echo -e "  ${Y}Run this command in a NEW terminal window:${N}"
+  echo -e "  ${Y}Run this command:${N}"
   echo ""
-  echo -e "    ${W}cd $(pwd)${N}"
-  echo -e "    ${W}node tui/dist/cli.js create-a-market-research-agent-.brain${N}"
+  echo -e "    ${W}node tui/dist/cli.js demo.brain --once \"Analyze Nike marketing\"${N}"
   echo ""
-  echo -e "  ${D}Or run it one-shot (no interactive chat):${N}"
-  echo ""
-  echo -e "    ${W}node tui/dist/cli.js create-a-market-research-agent-.brain --once \"Analyze Nike marketing\"${N}"
-  echo ""
-  read -rp "  Press Enter when you have tried the TUI > " _
+  read -rp "  Press Enter when you have tried it > " _
 
   echo ""
   echo -e "  ${C}------------------------------------------${N}"
@@ -297,14 +303,9 @@ if [ "$WALK_CHOICE" = "1" ]; then
   echo -e "  ${C}------------------------------------------${N}"
   echo ""
   echo -e "  ${W}You now know how to:${N}"
-  echo -e "    1. Create a brain with the AI Architect (browser)"
-  echo -e "    2. Export it as a .brain file"
-  echo -e "    3. Run any .brain file in the terminal with the TUI"
-  echo ""
-  echo -e "  ${D}Your .brain files are portable:${N}"
-  echo -e "    ${D}- Share them with anyone who has OpenBrain${N}"
-  echo -e "    ${D}- Run them on any machine: node tui/dist/cli.js <file>.brain${N}"
-  echo -e "    ${D}- Check them into git${N}"
+  echo -e "    1. Run any .brain file with: node tui/dist/cli.js <file>.brain"
+  echo -e "    2. Create your own brains at: http://127.0.0.1:8080"
+  echo -e "    3. Export them as .brain files to share"
   echo ""
 
   echo -e "  ${G}------------------------------------------${N}"
