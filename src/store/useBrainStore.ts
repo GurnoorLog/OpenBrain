@@ -22,7 +22,9 @@ function loadActiveProvider(): ProviderId {
   } catch {
     /* ignore */
   }
-  return 'fireworks'
+  const hasFireworks = typeof import.meta.env?.VITE_FIREWORKS_API_KEY === 'string' &&
+    (import.meta.env.VITE_FIREWORKS_API_KEY as string).trim() !== ''
+  return hasFireworks ? 'fireworks' : 'ollama'
 }
 
 function persistActiveProvider(providerId: ProviderId): void {
