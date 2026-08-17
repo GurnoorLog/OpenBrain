@@ -96,82 +96,74 @@ another machine — no cloud required.
 
 ### Prerequisites
 
-- [Node.js 18+](https://nodejs.org/)
-- [Docker Desktop](https://www.docker.com/products/docker-desktop/) (easiest way to run)
-- A [Fireworks API key](https://fireworks.ai/) for the AI Architect (cloud LLM)
+- [Docker Desktop](https://www.docker.com/products/docker-desktop/) installed and running
+- A [Fireworks API key](https://fireworks.ai/) (optional — local features work without one)
 
-### Step 1 — Clone the repo
+### One command — everything is set up
 
 ```bash
 git clone https://github.com/GurnoorLog/OpenBrain.git
 cd OpenBrain
+
+# macOS / Linux
+bash setup.sh
+
+# Windows PowerShell
+.\setup.ps1
 ```
 
-### Step 2 — Start the app
+The script will:
+1. Check Docker is working
+2. Ask for your API key (or skip for local-only mode)
+3. Build and start the stack
+4. Pull the local LLM model (~3GB, one-time)
 
-**With Docker (recommended):**
-```bash
-docker compose up -d
-# Open http://127.0.0.1:8080
-```
+When it says **"OpenBrain is ready!"**, open **http://127.0.0.1:8080** in your browser.
 
-**Without Docker (local dev):**
-```bash
-npm install
-npm run build
-node runtime/server.js
-# Open http://127.0.0.1:8080
-```
+### What you can do in the app
 
-### Step 3 — Create a brain with the AI Architect
-
-Once the app is open in your browser:
-
-1. You'll see a blank canvas and a chat box at the bottom.
-2. Type what you want — for example:
+1. **Create a brain** — type what you want in the chat, for example:
    > Create a market research agent that analyzes a company's marketing and gives improvement ideas.
-3. The **AI Architect** designs the brain for you, revealing nodes one by one on the canvas — each node with a reason for why it exists.
-4. When it's done, click **"Activate Agent"** to make it runnable.
-5. The brain auto-saves as a `.brain` file you can export and share.
+   The AI Architect builds the brain for you, node by node, on the canvas.
 
-### Step 4 — Test it in the TUI (terminal)
+2. **Run it** — click **"Activate Agent"**, then chat with your brain in the Agent panel.
 
-Every `.brain` file you create can also run in the terminal. No browser needed.
+3. **Export it** — your brain is a `.brain` file you can share, version control, or run anywhere.
+
+### Test a brain in the terminal (TUI)
 
 ```bash
+# Build the TUI (one-time)
 cd tui && npm install && npm run build && cd ..
 
-# Interactive — chat with your brain in the terminal
+# Run any .brain file as a terminal chat
 node tui/dist/cli.js create-a-market-research-agent-.brain
 
-# One-shot — ask a question and get an answer
+# Ask it something headless
 node tui/dist/cli.js create-a-market-research-agent-.brain --once "Analyze Acme Corp's marketing"
 ```
 
-TUI commands: `/help /graph /memory /clear-memory /backend /open <file> /exit`
+### Fine-tune a model on your own GPU (optional)
 
-### Step 5 — Try local fine-tuning (optional)
+In the browser, type a fine-tune prompt:
+> Fine-tune an LLM to summarize city council minutes into plain language.
 
-If you have a CUDA GPU and Python installed, you can train a model on your own machine:
+In the confirmation modal, select **"Train on: This machine"** and confirm.
+Watch the training live in the Agent Log.
 
+Or via the TUI:
 ```bash
-pip install torch --index-url https://download.pytorch.org/whl/cu118
-pip install peft transformers bitsandbytes datasets accelerate
-
-# Run the fine-tune demo brain
 node tui/dist/cli.js examples/local-finetune-demo.brain --local --once "run the fine-tune"
 ```
 
-Or from the browser: type a fine-tune prompt → the modal asks **"Train on: This machine"** → click confirm → watch the training live in the Agent Log.
+Requires: Python 3.10+, CUDA GPU, `pip install torch peft transformers bitsandbytes`.
 
-### Example brains to try
+### Stop / restart
 
-| File | What it does |
-| --- | --- |
-| `create-a-market-research-agent-.brain` | Market research agent (built by AI Architect) |
-| `marketing-analyzer.brain` | Marketing analysis |
-| `topic-brief.brain` | Topic briefing |
-| `examples/local-finetune-demo.brain` | Local fine-tuning demo |
+```bash
+docker compose down     # stop everything
+docker compose up -d    # start again
+```
 
 ### Prebuilt Docker image (no cloning needed)
 
@@ -180,6 +172,15 @@ docker pull praknoor/openbrain-runtime:0.1.1
 docker run -d -p 8080:8080 --name openbrain-runtime praknoor/openbrain-runtime:0.1.1
 # open http://127.0.0.1:8080
 ```
+
+### Example brains
+
+| File | What it does |
+| --- | --- |
+| `create-a-market-research-agent-.brain` | Market research agent |
+| `marketing-analyzer.brain` | Marketing analysis |
+| `topic-brief.brain` | Topic briefing |
+| `examples/local-finetune-demo.brain` | Local fine-tuning demo |
 
 ---
 
