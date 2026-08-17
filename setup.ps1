@@ -4,11 +4,12 @@
 $ErrorActionPreference = "Stop"
 
 Write-Host ""
-Write-Host "     ___   ____________  ________  ________" -ForegroundColor Cyan
-Write-Host "    /   | / ____/ __ \ \/ /_  __/ / ____/ /" -ForegroundColor Cyan
-Write-Host "   / /| |/ / __/ /_/ /\  / / /   / __/ / / " -ForegroundColor Cyan
-Write-Host "  / ___ / /_/ / _, _/ / / / /___/ /___/ /___" -ForegroundColor Cyan
-Write-Host " /_/  |_\____/_/ |_/_/ /_/_____/_____/_____/" -ForegroundColor Cyan
+Write-Host "  ____                          ____  _  __" -ForegroundColor Cyan
+Write-Host " | __ )  __ _ _ __   __ _ _   _ | __ )| |/ /" -ForegroundColor Cyan
+Write-Host " |  _ \ / _` | '_ \ / _` | | | ||  _ \ ' / " -ForegroundColor Cyan
+Write-Host " | |_) | (_| | | | | (_| | |_| || |_) | . \ " -ForegroundColor Cyan
+Write-Host " |____/ \__,_|_| |_|\__,_|\__, ||____/|_|\_\" -ForegroundColor Cyan
+Write-Host "                          |___/             " -ForegroundColor Cyan
 Write-Host ""
 Write-Host "  build your own mind" -ForegroundColor White
 Write-Host "  local-first AI agent platform" -ForegroundColor DarkGray
@@ -64,81 +65,124 @@ $useOllama = ($llmChoice -ne "2")
 
 if ($useOllama) {
 
-    # --- Start stack first so Ollama is available ---
+    # --- Check HOST Ollama first ---
     Write-Host ""
-    Write-Host -NoNewline "  [4/4] Starting OpenBrain stack...    "
-    $ErrorActionPreference = "Continue"
-    docker compose up -d --build 2>&1 | Out-Null
-    $ErrorActionPreference = "Stop"
-    Write-Host "OK" -ForegroundColor Green
+    Write-Host "  Checking Ollama on your machine..." -ForegroundColor White
 
-    Write-Host ""
-    Write-Host "  Waiting for Ollama to start..." -ForegroundColor DarkGray
-    for ($i = 0; $i -lt 30; $i++) {
-        try {
-            Invoke-RestMethod -Uri "http://127.0.0.1:11434/api/tags" -TimeoutSec 2 -ErrorAction Stop | Out-Null
-            break
-        } catch { Start-Sleep -Seconds 1 }
-    }
+    $hostOllamaOk = $false
+    try {
+        $hostModels = Invoke-RestMethod -Uri "http://127.0.0.1:11434/api/tags" -TimeoutSec 3 -ErrorAction Stop
+        $hostOllamaOk = $true
+    } catch {}
 
-    # --- Check what models are installed ---
-    Write-Host ""
-    Write-Host "  Checking installed models..." -ForegroundColor White
-    Write-Host ""
+    if ($hostOllamaOk) {
+        Write-Host "  Ollama is running on your machine!" -ForegroundColor Green
+        Write-Host ""
 
-    $modelsRaw = docker exec openbrain-ollama ollama list 2>&1
-    $modelLines = @()
-    foreach ($line in $modelsRaw) {
-        if ($line -match "^\S+\s") {
-            $name = ($line -split "\s+")[0]
-            if ($name -ne "NAME") {
-                $modelLines += $name
+        # Get model names from host
+        $modelList = @()
+        if ($hostModels.models) {
+            foreach ($m in $hostModels.models) {
+                $modelList += $m.name
             }
         }
-    }
 
-    if ($modelLines.Count -gt 0) {
-        Write-Host "  You have these models installed:" -ForegroundColor Green
-        Write-Host ""
-        for ($idx = 0; $idx -lt $modelLines.Count; $idx++) {
-            Write-Host "    [$($idx + 1)]  $($modelLines[$idx])" -ForegroundColor White
-        }
-        Write-Host ""
-        Write-Host "    [D]  Download a new model (qwen2.5:7b recommended)" -ForegroundColor Yellow
-        Write-Host ""
-        $modelPick = Read-Host "  Pick a model"
-
-        if ($modelPick -eq "D" -or $modelPick -eq "d") {
+        if ($modelList.Count -gt 0) {
+            Write-Host "  Your installed models:" -ForegroundColor White
             Write-Host ""
-            Write-Host "  Downloading qwen2.5:7b (~3GB, be patient)..." -ForegroundColor Cyan
-            docker exec openbrain-ollama ollama pull qwen2.5:7b 2>&1
-            $selectedModel = "qwen2.5:7b"
-        } else {
-            $pickIdx = [int]$modelPick - 1
-            if ($pickIdx -ge 0 -and $pickIdx -lt $modelLines.Count) {
-                $selectedModel = $modelLines[$pickIdx]
-            } else {
-                $selectedModel = $modelLines[0]
+            for ($idx = 0; $idx -lt $modelList.Count; $idx++) {
+                Write-Host "    [$($idx + 1)]  $($modelList[$idx])" -ForegroundColor White
             }
+            Write-Host ""
+            Write-Host "    [D]  Download qwen2.5:7b (recommended, ~3GB)" -ForegroundColor Yellow
+            Write-Host ""
+            $modelPick = Read-Host "  Pick a model"
+
+            if ($modelPick -eq "D" -or $modelPick -eq "d") {
+                Write-Host ""
+                Write-Host "  Downloading qwen2.5:7b (~3GB, be patient)..." -ForegroundColor Cyan
+                & ollama pull qwen2.5:7b 2>&1
+                $selectedModel = "qwen2.5:7b"
+            } else {
+                $pickIdx = [int]$modelPick - 1
+                if ($pickIdx -ge 0 -and $pickIdx -lt $modelList.Count) {
+                    $selectedModel = $modelList[$pickIdx]
+                } else {
+                    $selectedModel = $modelList[0]
+                }
+            }
+        } else {
+            Write-Host "  No models found. Downloading qwen2.5:7b (~3GB)..." -ForegroundColor Yellow
+            & ollama pull qwen2.5:7b 2>&1
+            $selectedModel = "qwen2.5:7b"
         }
-    } else {
-        Write-Host "  No models found. Downloading qwen2.5:7b (~3GB)..." -ForegroundColor Yellow
+
+        # Point the container to the HOST Ollama
+        $env_content = Get-Content .env -Raw
+        $env_content = $env_content -replace "^OLLAMA_URL=.*", "OLLAMA_URL=http://host.docker.internal:11434"
+        if ($env_content -notmatch "OLLAMA_URL=") {
+            $env_content += "`nOLLAMA_URL=http://host.docker.internal:11434"
+        }
+        if ($env_content -match "OLLAMA_MODEL=") {
+            $env_content = $env_content -replace "^OLLAMA_MODEL=.*", "OLLAMA_MODEL=$selectedModel"
+        } else {
+            $env_content += "`nOLLAMA_MODEL=$selectedModel"
+        }
+        Set-Content .env $env_content
+
         Write-Host ""
+        Write-Host "  Using model: $selectedModel (from your machine)" -ForegroundColor Green
+        Write-Host "  Ollama URL:  http://host.docker.internal:11434" -ForegroundColor DarkGray
+
+    } else {
+        # No host Ollama - use container Ollama
+        Write-Host "  Ollama not found on your machine." -ForegroundColor Yellow
+        Write-Host "  Starting OpenBrain with built-in Ollama..." -ForegroundColor White
+        Write-Host ""
+
+        Write-Host -NoNewline "  [4/4] Starting OpenBrain stack...    "
+        $ErrorActionPreference = "Continue"
+        docker compose up -d --build 2>&1 | Out-Null
+        $ErrorActionPreference = "Stop"
+        Write-Host "OK" -ForegroundColor Green
+
+        Write-Host ""
+        Write-Host "  Waiting for Ollama to start..." -ForegroundColor DarkGray
+        for ($i = 0; $i -lt 30; $i++) {
+            try {
+                Invoke-RestMethod -Uri "http://127.0.0.1:11434/api/tags" -TimeoutSec 2 -ErrorAction Stop | Out-Null
+                break
+            } catch { Start-Sleep -Seconds 1 }
+        }
+
+        Write-Host ""
+        Write-Host "  Downloading qwen2.5:7b (~3GB, be patient)..." -ForegroundColor Yellow
         docker exec openbrain-ollama ollama pull qwen2.5:7b 2>&1
         $selectedModel = "qwen2.5:7b"
+
+        $env_content = Get-Content .env -Raw
+        if ($env_content -match "OLLAMA_MODEL=") {
+            $env_content = $env_content -replace "^OLLAMA_MODEL=.*", "OLLAMA_MODEL=$selectedModel"
+        } else {
+            $env_content += "`nOLLAMA_MODEL=$selectedModel"
+        }
+        Set-Content .env $env_content
+
+        Write-Host ""
+        Write-Host "  Using model: $selectedModel (inside Docker)" -ForegroundColor Green
     }
 
-    # --- Save model choice to .env ---
-    $env_content = Get-Content .env -Raw
-    if ($env_content -match "OLLAMA_MODEL=") {
-        $env_content = $env_content -replace "^OLLAMA_MODEL=.*", "OLLAMA_MODEL=$selectedModel"
+    if (-not $hostOllamaOk) {
+        # Already started above
     } else {
-        $env_content += "`nOLLAMA_MODEL=$selectedModel"
+        # Start stack (Ollama is on host, no need to start container Ollama)
+        Write-Host ""
+        Write-Host -NoNewline "  [4/4] Starting OpenBrain stack...    "
+        $ErrorActionPreference = "Continue"
+        docker compose up -d --build 2>&1 | Out-Null
+        $ErrorActionPreference = "Stop"
+        Write-Host "OK" -ForegroundColor Green
     }
-    Set-Content .env $env_content
-
-    Write-Host ""
-    Write-Host "  Using model: $selectedModel" -ForegroundColor Green
 
 } else {
 

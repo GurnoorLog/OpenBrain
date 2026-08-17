@@ -14,11 +14,12 @@ N='\033[0m'
 
 echo ""
 echo -e "${C}"
-echo "     ___   ____________  ________  ________"
-echo "    /   | / ____/ __ \ \/ /_  __/ / ____/ /"
-echo "   / /| |/ / __/ /_/ /\  / / /   / __/ / / "
-echo "  / ___ / /_/ / _, _/ / / / /___/ /___/ /___"
-echo " /_/  |_\____/_/ |_/_/ /_/_____/_____/_____/"
+echo "  ____                          ____  _  __"
+echo " | __ )  __ _ _ __   __ _ _   _ | __ )| |/ /"
+echo " |  _ \ / _\` | '_ \ / _\` | | | ||  _ \ ' / "
+echo " | |_) | (_| | | | | (_| | |_| || |_) | . \ "
+echo " |____/ \__,_|_| |_|\__,_|\__, ||____/|_|\_\\"
+echo "                          |___/             "
 echo ""
 echo -e "${W}  build your own mind${N}"
 echo -e "${D}  local-first AI agent platform${N}"
@@ -70,69 +71,115 @@ read -rp "  Pick 1 or 2 > " LLM_CHOICE
 
 if [ "$LLM_CHOICE" != "2" ]; then
 
-  # --- Start stack first so Ollama is available ---
+  # --- Check HOST Ollama first ---
   echo ""
-  echo -ne "  ${D}[4/4]${N} Starting OpenBrain stack...    "
-  docker compose up -d --build 2>&1 | tail -1 | tr -d '\n'
-  echo -e " ${G}OK${N}"
+  echo -e "  ${W}Checking Ollama on your machine...${N}"
 
-  echo ""
-  echo -e "  ${D}Waiting for Ollama to start...${N}"
-  for i in $(seq 1 30); do
-    if curl -s http://127.0.0.1:11434/api/tags > /dev/null 2>&1; then
-      break
-    fi
-    sleep 1
-  done
+  HOST_OLLAMA_OK=false
+  if curl -s http://127.0.0.1:11434/api/tags > /dev/null 2>&1; then
+    HOST_OLLAMA_OK=true
+  fi
 
-  # --- Check what models are installed ---
-  echo ""
-  echo -e "  ${W}Checking installed models...${N}"
-  echo ""
-
-  MODELS=$(docker exec openbrain-ollama ollama list 2>&1 | awk 'NR>1 && NF>0 {print $1}')
-
-  if [ -n "$MODELS" ]; then
-    echo -e "  ${G}You have these models installed:${N}"
+  if [ "$HOST_OLLAMA_OK" = true ]; then
+    echo -e "  ${G}Ollama is running on your machine!${N}"
     echo ""
-    IDX=1
-    while IFS= read -r m; do
-      echo -e "    ${C}[$IDX]${N}  $m"
-      IDX=$((IDX + 1))
-    done <<< "$MODELS"
-    echo ""
-    echo -e "    ${Y}[D]${N}  Download a new model (qwen2.5:7b recommended)"
-    echo ""
-    read -rp "  Pick a model > " MODEL_PICK
 
-    if [ "$MODEL_PICK" = "D" ] || [ "$MODEL_PICK" = "d" ]; then
+    # Get model names
+    MODELS=$(curl -s http://127.0.0.1:11434/api/tags | grep -o '"name":"[^"]*"' | sed 's/"name":"//;s/"//' || true)
+
+    if [ -n "$MODELS" ]; then
+      echo -e "  ${W}Your installed models:${N}"
       echo ""
-      echo -e "  ${C}Downloading qwen2.5:7b (~3GB, be patient)...${N}"
-      docker exec openbrain-ollama ollama pull qwen2.5:7b 2>&1
-      SELECTED_MODEL="qwen2.5:7b"
-    else
-      SELECTED_MODEL=$(echo "$MODELS" | sed -n "${MODEL_PICK}p")
-      if [ -z "$SELECTED_MODEL" ]; then
-        SELECTED_MODEL=$(echo "$MODELS" | head -1)
+      IDX=1
+      while IFS= read -r m; do
+        echo -e "    ${C}[$IDX]${N}  $m"
+        IDX=$((IDX + 1))
+      done <<< "$MODELS"
+      echo ""
+      echo -e "    ${Y}[D]${N}  Download qwen2.5:7b (recommended, ~3GB)"
+      echo ""
+      read -rp "  Pick a model > " MODEL_PICK
+
+      if [ "$MODEL_PICK" = "D" ] || [ "$MODEL_PICK" = "d" ]; then
+        echo ""
+        echo -e "  ${C}Downloading qwen2.5:7b (~3GB, be patient)...${N}"
+        ollama pull qwen2.5:7b 2>&1
+        SELECTED_MODEL="qwen2.5:7b"
+      else
+        SELECTED_MODEL=$(echo "$MODELS" | sed -n "${MODEL_PICK}p")
+        if [ -z "$SELECTED_MODEL" ]; then
+          SELECTED_MODEL=$(echo "$MODELS" | head -1)
+        fi
       fi
+    else
+      echo -e "  ${Y}No models found. Downloading qwen2.5:7b (~3GB)...${N}"
+      echo ""
+      ollama pull qwen2.5:7b 2>&1
+      SELECTED_MODEL="qwen2.5:7b"
     fi
-  else
-    echo -e "  ${Y}No models found. Downloading qwen2.5:7b (~3GB)...${N}"
+
+    # Point container to host Ollama
+    if grep -q "^OLLAMA_URL=" .env; then
+      sed -i.bak "s|^OLLAMA_URL=.*|OLLAMA_URL=http://host.docker.internal:11434|" .env
+    else
+      echo "OLLAMA_URL=http://host.docker.internal:11434" >> .env
+    fi
+    if grep -q "^OLLAMA_MODEL=" .env; then
+      sed -i.bak "s|^OLLAMA_MODEL=.*|OLLAMA_MODEL=$SELECTED_MODEL|" .env
+    else
+      echo "OLLAMA_MODEL=$SELECTED_MODEL" >> .env
+    fi
+    rm -f .env.bak
+
     echo ""
+    echo -e "  ${G}Using model: $SELECTED_MODEL (from your machine)${N}"
+    echo -e "  ${D}Ollama URL:  http://host.docker.internal:11434${N}"
+
+  else
+    # No host Ollama - use container
+    echo -e "  ${Y}Ollama not found on your machine.${N}"
+    echo -e "  ${W}Starting OpenBrain with built-in Ollama...${N}"
+    echo ""
+
+    echo -ne "  ${D}[4/4]${N} Starting OpenBrain stack...    "
+    docker compose up -d --build 2>&1 | tail -1 | tr -d '\n'
+    echo -e " ${G}OK${N}"
+
+    echo ""
+    echo -e "  ${D}Waiting for Ollama to start...${N}"
+    for i in $(seq 1 30); do
+      if curl -s http://127.0.0.1:11434/api/tags > /dev/null 2>&1; then
+        break
+      fi
+      sleep 1
+    done
+
+    echo ""
+    echo -e "  ${Y}Downloading qwen2.5:7b (~3GB, be patient)...${N}"
     docker exec openbrain-ollama ollama pull qwen2.5:7b 2>&1
     SELECTED_MODEL="qwen2.5:7b"
+
+    if grep -q "^OLLAMA_MODEL=" .env; then
+      sed -i.bak "s|^OLLAMA_MODEL=.*|OLLAMA_MODEL=$SELECTED_MODEL|" .env
+    else
+      echo "OLLAMA_MODEL=$SELECTED_MODEL" >> .env
+    fi
+    rm -f .env.bak
+
+    echo ""
+    echo -e "  ${G}Using model: $SELECTED_MODEL (inside Docker)${N}"
   fi
 
-  # --- Save model choice to .env ---
-  if grep -q "^OLLAMA_MODEL=" .env; then
-    sed -i.bak "s|^OLLAMA_MODEL=.*|OLLAMA_MODEL=$SELECTED_MODEL|" .env
+  if [ "$HOST_OLLAMA_OK" = false ]; then
+    # Already started above
+    :
   else
-    echo "OLLAMA_MODEL=$SELECTED_MODEL" >> .env
+    # Start stack
+    echo ""
+    echo -ne "  ${D}[4/4]${N} Starting OpenBrain stack...    "
+    docker compose up -d --build 2>&1 | tail -1 | tr -d '\n'
+    echo -e " ${G}OK${N}"
   fi
-  rm -f .env.bak
-
-  echo ""
-  echo -e "  ${G}Using model: $SELECTED_MODEL${N}"
 
 else
 
@@ -161,7 +208,6 @@ else
     echo -e "  ${G}API key saved.${N}"
   fi
 
-  # --- Start stack ---
   echo ""
   echo -ne "  ${D}[4/4]${N} Starting OpenBrain stack...    "
   docker compose up -d --build 2>&1 | tail -1 | tr -d '\n'
