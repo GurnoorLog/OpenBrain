@@ -169,10 +169,13 @@ docker compose up -d    # start again
 ### Prebuilt Docker image (no cloning needed)
 
 ```bash
-docker pull praknoor/openbrain-runtime:0.1.1
-docker run -d -p 8080:8080 --name openbrain-runtime praknoor/openbrain-runtime:0.1.1
+docker pull praknoor/openbrain-runtime:0.1.3
+docker run -d -p 8080:8080 --name openbrain-runtime praknoor/openbrain-runtime:0.1.3
 # open http://127.0.0.1:8080
 ```
+
+> For full setup instructions (Ollama, API keys, guided walkthrough), see the
+> [main README](https://github.com/GurnoorLog/OpenBrain#readme).
 
 ### Example brains
 
