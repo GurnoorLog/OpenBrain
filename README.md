@@ -94,59 +94,143 @@ another machine — no cloud required.
 
 ## How to run it
 
-### Quick start (Docker — the full stack)
+Three paths — pick whichever fits your setup.
+
+---
+
+### Option A: Docker (full stack, no local toolchain needed)
+
+**Prerequisites:** [Docker Desktop](https://www.docker.com/products/docker-desktop/) installed.
+
 ```bash
-cp .env.example .env    # optional keys; local features need none
-docker compose up -d    # OpenBrain Desktop + Runtime + Ollama
-# open http://127.0.0.1:8080
+# 1. Clone the repo
+git clone https://github.com/GurnoorLog/OpenBrain.git
+cd OpenBrain
+
+# 2. (Optional) Add your own API keys for cloud LLM / GitHub / Hugging Face.
+#    Without keys, local features still work (Ollama, local fine-tuning).
+cp .env.example .env
+#    Open .env and paste your keys next to each variable.
+
+# 3. Start everything
+docker compose up -d
+
+# 4. Open the app
+#    http://127.0.0.1:8080
 ```
 
-Optional services:
+The stack brings up:
+- `openbrain-runtime` — the main app (serves the canvas, architect, and runtime)
+- `openbrain-ollama` — local LLM inference server (qwen2.5:7b pulled automatically)
+
+Optional extras:
 ```bash
 docker compose --profile infra up -d    # + PostgreSQL, Redis, Qdrant
 docker compose --profile mcp up -d      # + MCP Gateway
 docker compose --profile supabase up -d # + Supabase DB
 ```
 
-### Pull the prebuilt runtime image
-```bash
-docker pull praknoor/openbrain-runtime:0.1.1
-docker run -d -p 8080:8080 \
-  -v "$(pwd)/workspace:/workspace" \
-  --name openbrain-runtime praknoor/openbrain-runtime:0.1.1
-# open http://127.0.0.1:8080
-```
+---
 
-### Local development (no Docker)
+### Option B: Local development (no Docker, full access to fine-tuning)
+
+**Prerequisites:** [Node.js 18+](https://nodejs.org/), [Python 3.10+](https://www.python.org/) (for local fine-tuning only), a CUDA GPU (for local fine-tuning only).
+
 ```bash
+# 1. Clone the repo
+git clone https://github.com/GurnoorLog/OpenBrain.git
+cd OpenBrain
+
+# 2. Install frontend + runtime + TUI dependencies
 npm install
-npm run dev        # Vite dev server — browser execution
-npm run build      # typecheck + production build
+cd runtime && npm install && cd ..
+cd tui && npm install && npm run build && cd ..
+
+# 3. Build the frontend
+npm run build
+
+# 4. Set your API keys (optional — local features need none)
+cp .env.example .env
+#    Open .env and paste your keys.
+
+# 5. Start the runtime server (serves the built app + local APIs)
+$env:DIST_DIR="dist"
+node runtime/server.js
+#    On Mac/Linux use:  DIST_DIR=dist node runtime/server.js
+
+# 6. Open the app
+#    http://127.0.0.1:8080
 ```
 
-Run the Runtime + CLI locally:
+Why this path: the Docker image has no GPU or Python, so **"Train on this
+machine"** (local fine-tuning) only works when the app is served by a host
+runtime on a machine with Python + CUDA.
+
+---
+
+### Option C: TUI only (no browser needed)
+
+**Prerequisites:** Node.js 18+.
+
 ```bash
-node runtime/server.js      # serves ./dist + local APIs on :8080
-node cli/brain.js doctor
-node cli/brain.js init && node cli/brain.js run my-brain.brain --message "hello"
+# 1. Clone the repo
+git clone https://github.com/GurnoorLog/OpenBrain.git
+cd OpenBrain
+
+# 2. Build the TUI
+cd tui && npm install && npm run build && cd ..
+
+# 3. Run a .brain file as an interactive chat
+node tui/dist/cli.js create-a-market-research-agent-.brain
+
+# 4. Or run headless (one-shot)
+node tui/dist/cli.js create-a-market-research-agent-.brain --once "Analyze Acme Corp's marketing strategy"
 ```
 
-### TUI — a `.brain` as a terminal agent
+TUI commands: `/help /graph /memory /clear-memory /backend /open <file> /exit`
+
+---
+
+### Try local fine-tuning (requires Option B above + CUDA GPU)
+
 ```bash
-cd tui && npm install && npm run build
-node tui/dist/cli.js my-brain.brain                       # interactive chat
-node tui/dist/cli.js my-brain.brain --once "Ask something" # headless
-```
-In-TUI commands: `/help /graph /memory /clear-memory /backend /open <file> /exit`.
+# 1. Make sure the host runtime is running (Option B steps 1-5)
+#    and you have Python + torch installed:
+#      pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
+#      pip install peft transformers bitsandbytes datasets accelerate
 
-### Try local fine-tuning
+# 2. Open http://127.0.0.1:8080, type in the chat:
+#      "Fine-tune an LLM to summarize city council minutes into plain,
+#       public-friendly language. Use LoRA and keep it fast for a demo."
+
+# 3. In the confirmation modal, select:
+#      Train on:  This machine
+#      Click:     "Train on this machine"
+
+# 4. Watch the Agent Log: probe → download → training steps → adapter saved.
+```
+
+Or via TUI (headless):
 ```bash
 node tui/dist/cli.js examples/local-finetune-demo.brain --local --once "run the fine-tune"
 ```
-Requires on the host: Python 3.11+, CUDA GPU, `torch peft transformers
-bitsandbytes`. The trainer probes the machine at runtime and adapts.
 
-### Example brains
+---
+
+### Prebuilt Docker image (without cloning)
+
+```bash
+docker pull praknoor/openbrain-runtime:0.1.1
+docker run -d -p 8080:8080 --name openbrain-runtime praknoor/openbrain-runtime:0.1.1
+# open http://127.0.0.1:8080
+```
+Note: this image has no GPU/Python — cloud and Architect work fine, but local
+fine-tuning will fail with "Python not found". For local fine-tuning, use
+**Option B**.
+
+---
+
+### Example brains to try
 - `examples/local-finetune-demo.brain` — the local fine-tune flow
 - `create-a-market-research-agent-.brain` — architect-built market research agent
 - `marketing-analyzer.brain`, `topic-brief.brain`, `build-a-document-backed-market-research-.brain`
