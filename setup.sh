@@ -237,7 +237,7 @@ if [ "$WALK_CHOICE" = "1" ]; then
 
   echo ""
   echo -e "  ${C}------------------------------------------${N}"
-  echo -e "  ${C}STEP 1 / 4 : CREATE A BRAIN${N}"
+  echo -e "  ${C}STEP 1 / 3 : CREATE A BRAIN${N}"
   echo -e "  ${C}------------------------------------------${N}"
   echo ""
 
@@ -264,20 +264,14 @@ if [ "$WALK_CHOICE" = "1" ]; then
   echo -e "  ${G}Nice! Your brain is created.${N}"
   echo ""
 
-  echo -e "  ${C}------------------------------------------${N}"
-  echo -e "  ${C}STEP 2 / 4 : TEST IT IN THE APP${N}"
-  echo -e "  ${C}------------------------------------------${N}"
+  echo -e "  Now export it: click the Export button in the top-right corner."
+  echo -e "  ${D}It saves a .brain file to your Downloads folder.${N}"
   echo ""
-  echo -e "  Click the ${Y}Activate Agent${N} button to make your brain runnable."
-  echo ""
-  echo -e "  ${D}Then type a question in the Agent panel to chat with it.${N}"
-  echo -e "  ${D}For example: \"Analyze Nike marketing and give me ideas\"${N}"
-  echo ""
-  read -rp "  Press Enter when you have tested it > " _
+  read -rp "  Press Enter when you have exported the .brain file > " _
 
   echo ""
   echo -e "  ${C}------------------------------------------${N}"
-  echo -e "  ${C}STEP 3 / 4 : TEST IT IN THE TERMINAL (TUI)${N}"
+  echo -e "  ${C}STEP 2 / 3 : RUN IT IN THE TERMINAL (TUI)${N}"
   echo -e "  ${C}------------------------------------------${N}"
   echo ""
 
@@ -299,17 +293,18 @@ if [ "$WALK_CHOICE" = "1" ]; then
 
   echo ""
   echo -e "  ${C}------------------------------------------${N}"
-  echo -e "  ${C}STEP 4 / 4 : EXPORT YOUR BRAIN${N}"
+  echo -e "  ${C}STEP 3 / 3 : WHAT YOU LEARNED${N}"
   echo -e "  ${C}------------------------------------------${N}"
   echo ""
-  echo -e "  ${W}Your brain is saved as a .brain file you can share:${N}"
+  echo -e "  ${W}You now know how to:${N}"
+  echo -e "    1. Create a brain with the AI Architect (browser)"
+  echo -e "    2. Export it as a .brain file"
+  echo -e "    3. Run any .brain file in the terminal with the TUI"
   echo ""
-  echo -e "    ${W}create-a-market-research-agent-.brain${N}"
-  echo ""
-  echo -e "  ${D}You can:${N}"
-  echo -e "    ${D}- Share it with anyone who has OpenBrain${N}"
-  echo -e "    ${D}- Run it on any machine: node tui/dist/cli.js <file>.brain${N}"
-  echo -e "    ${D}- Check it into git${N}"
+  echo -e "  ${D}Your .brain files are portable:${N}"
+  echo -e "    ${D}- Share them with anyone who has OpenBrain${N}"
+  echo -e "    ${D}- Run them on any machine: node tui/dist/cli.js <file>.brain${N}"
+  echo -e "    ${D}- Check them into git${N}"
   echo ""
 
   echo -e "  ${G}------------------------------------------${N}"

@@ -239,7 +239,7 @@ if ($walkChoice -eq "1") {
 
     Write-Host ""
     Write-Host "  ------------------------------------------" -ForegroundColor Cyan
-    Write-Host "  STEP 1 / 4 : CREATE A BRAIN" -ForegroundColor Cyan
+    Write-Host "  STEP 1 / 3 : CREATE A BRAIN" -ForegroundColor Cyan
     Write-Host "  ------------------------------------------" -ForegroundColor Cyan
     Write-Host ""
 
@@ -262,20 +262,14 @@ if ($walkChoice -eq "1") {
     Write-Host "  Nice! Your brain is created." -ForegroundColor Green
     Write-Host ""
 
-    Write-Host "  ------------------------------------------" -ForegroundColor Cyan
-    Write-Host "  STEP 2 / 4 : TEST IT IN THE APP" -ForegroundColor Cyan
-    Write-Host "  ------------------------------------------" -ForegroundColor Cyan
+    Write-Host "  Now export it: click the Export button in the top-right corner." -ForegroundColor Yellow
+    Write-Host "  It saves a .brain file to your Downloads folder." -ForegroundColor DarkGray
     Write-Host ""
-    Write-Host "  Click the Activate Agent button to make your brain runnable." -ForegroundColor White
-    Write-Host ""
-    Write-Host "  Then type a question in the Agent panel to chat with it." -ForegroundColor DarkGray
-    Write-Host '  For example: "Analyze Nike marketing and give me ideas"' -ForegroundColor DarkGray
-    Write-Host ""
-    Read-Host "  Press Enter when you have tested it"
+    Read-Host "  Press Enter when you have exported the .brain file"
 
     Write-Host ""
     Write-Host "  ------------------------------------------" -ForegroundColor Cyan
-    Write-Host "  STEP 3 / 4 : TEST IT IN THE TERMINAL (TUI)" -ForegroundColor Cyan
+    Write-Host "  STEP 2 / 3 : RUN IT IN THE TERMINAL (TUI)" -ForegroundColor Cyan
     Write-Host "  ------------------------------------------" -ForegroundColor Cyan
     Write-Host ""
 
@@ -300,17 +294,18 @@ if ($walkChoice -eq "1") {
 
     Write-Host ""
     Write-Host "  ------------------------------------------" -ForegroundColor Cyan
-    Write-Host "  STEP 4 / 4 : EXPORT YOUR BRAIN" -ForegroundColor Cyan
+    Write-Host "  STEP 3 / 3 : WHAT YOU LEARNED" -ForegroundColor Cyan
     Write-Host "  ------------------------------------------" -ForegroundColor Cyan
     Write-Host ""
-    Write-Host "  Your brain is saved as a .brain file you can share:" -ForegroundColor White
+    Write-Host "  You now know how to:" -ForegroundColor White
+    Write-Host "    1. Create a brain with the AI Architect (browser)" -ForegroundColor White
+    Write-Host "    2. Export it as a .brain file" -ForegroundColor White
+    Write-Host "    3. Run any .brain file in the terminal with the TUI" -ForegroundColor White
     Write-Host ""
-    Write-Host "    create-a-market-research-agent-.brain" -ForegroundColor White
-    Write-Host ""
-    Write-Host "  You can:" -ForegroundColor DarkGray
-    Write-Host "    - Share it with anyone who has OpenBrain" -ForegroundColor DarkGray
-    Write-Host "    - Run it on any machine: node tui\dist\cli.js <file>.brain" -ForegroundColor DarkGray
-    Write-Host "    - Check it into git" -ForegroundColor DarkGray
+    Write-Host "  Your .brain files are portable:" -ForegroundColor DarkGray
+    Write-Host "    - Share them with anyone who has OpenBrain" -ForegroundColor DarkGray
+    Write-Host "    - Run them on any machine: node tui\dist\cli.js <file>.brain" -ForegroundColor DarkGray
+    Write-Host "    - Check them into git" -ForegroundColor DarkGray
     Write-Host ""
 
     Write-Host "  ------------------------------------------" -ForegroundColor Green

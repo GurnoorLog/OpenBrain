@@ -214,7 +214,7 @@ export default function Header() {
             <iconify-icon icon="lucide:square" className="text-xl"></iconify-icon>
           </button>
         )}
-        <button id="nav-export-btn" className="nav-btn text-gray-300" onClick={exportBrain}>
+        <button id="nav-export-btn" className="nav-btn text-gray-300" onClick={exportBrainFile}>
           <iconify-icon icon="lucide:external-link" className="text-lg"></iconify-icon>
           Export
         </button>
