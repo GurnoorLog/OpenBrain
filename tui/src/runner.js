@@ -79,7 +79,7 @@ export async function createRunner({ brain, runtimeUrl, forceLocal, knowledgeDir
   const localMcp = mcpClient ? new mcpClient.McpManager(mcpConfig.servers, mcpConfig.file) : null
   const hasServers = Object.keys(mcpConfig.servers).length > 0
   let backend = 'local'
-  if (!forceLocal && runtimeUrl !== undefined) {
+  if (!forceLocal) {
     backend = (await isReachable(requested)) ? 'runtime' : 'local'
   }
 
