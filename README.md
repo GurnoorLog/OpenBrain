@@ -1,5 +1,10 @@
 # OpenBrain
 
+> **Still in beta.** This is the bare minimum — just the foundation. I have a
+> long way to go before it's fully usable, so please forgive me if something
+> doesn't work. But you can watch the video for a full feature showcase:
+> **[Watch the demo](https://youtu.be/tX9TiHpuJhE?si=FQzuDhMjM4sVOkWC)**
+
 **Build AI agents by drawing them.**
 
 OpenBrain is a local-first platform where you design AI agents as visual node graphs. Drag nodes around, connect them, and watch your agent come to life. You can even describe what you want in plain English and an AI Architect will build the graph for you.
