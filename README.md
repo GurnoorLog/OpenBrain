@@ -71,9 +71,6 @@ docker run -d -p 8080:8080 --name openbrain-runtime praknoor/openbrain-runtime:0
 
 Then open **http://127.0.0.1:8080** in your browser.
 
-> For the full guided experience (Ollama setup, API keys, walkthrough), follow the
-> [complete setup instructions](https://github.com/GurnoorLog/OpenBrain#how-to-run-it).
-
 ---
 
 ## Using the app
