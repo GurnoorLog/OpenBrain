@@ -1,44 +1,44 @@
 # OpenBrain
 
-> **Beta.** I'm still working on this. Stuff will break. Forgive me.
-> For a full walkthrough of what it does, watch the video:
+> **Still beta.** I'm building this as I go. Things will break. Sorry about that.
+> Here's a video showing what it does right now:
 > [Watch the demo](https://youtu.be/tX9TiHpuJhE?si=FQzuDhMjM4sVOkWC)
 
-**Build AI agents by drawing them.**
+**You draw AI agents and they just work.**
 
-You design AI agents as visual node graphs — drag nodes around, connect them, and they become something that actually runs. You can also just describe what you want in plain English and an AI Architect builds the whole graph for you. Your data stays on your machine.
+That's the idea. You drag nodes around a canvas, wire them up, and you've got an agent. Or you type a sentence and an AI builds the whole graph for you. Everything runs on your machine.
 
 ---
 
-## What is this?
+## What is this
 
-You know Unreal Engine's Blueprints? Same idea, but for AI agents instead of games. Each node is a real thing your agent can do — call an LLM, search the web, read a file, run Python, fine-tune a model. Connect them and you've got an agent.
+Think Unreal Engine Blueprints, but for AI. Each node on the canvas does something real — calls an LLM, grabs a webpage, reads a file, runs code, whatever. Connect them and you have an agent.
 
-Tell the AI what you want:
+Or just tell the AI what you want:
 
 > "Create a market research agent that analyzes a company's marketing and suggests improvements"
 
-It figures out the nodes, the reasoning, the connections. Builds it on the canvas while you watch.
+It builds the graph for you. You watch it happen.
 
 ---
 
-## What's in here
+## What's here
 
-**Visual canvas.** Drag, drop, connect. Like building with blocks, except the blocks do things.
+**Canvas.** Drag nodes, connect them, watch it come together. Like LEGOs that actually do stuff.
 
-**AI Architect.** Describe what you want. It designs the graph and explains why it picked each node.
+**AI Architect.** Say what you want. It figures out the nodes and why each one matters.
 
-**Run it anywhere.** Browser app, terminal, REST API, cron job — same `.brain` file works in all of them.
+**Works everywhere.** Browser, terminal, REST API, scheduled jobs — same `.brain` file in all of them.
 
-**Fine-tune on your GPU.** The trainer checks your hardware (CUDA, VRAM, what you've got) and picks a model that fits. 4GB laptop or A100, doesn't matter. No setup.
+**Fine-tune on your GPU.** The trainer looks at your hardware and picks a model that fits. Doesn't matter if you've got a 4GB laptop or an A100.
 
-**Real tools, not demos.** LLM calls, web browsing, file I/O, GitHub, MCP servers, RAG, Python, image generation. They actually run.
+**Actually functional tools.** LLM calls, web scraping, file I/O, GitHub, MCP, RAG, Python, image gen. Not placeholders.
 
-**`.brain` files.** Export your agent as one file. Move it, share it, version control it.
+**`.brain` files.** Export your agent as one file. Pass it around, version control it, run it somewhere else.
 
 ---
 
-## Quick start
+## Get started
 
 ```bash
 git clone https://github.com/GurnoorLog/OpenBrain.git
@@ -51,15 +51,15 @@ bash setup.sh
 .\setup.ps1
 ```
 
-The script handles Docker, Ollama, model downloads — everything. It can walk you through creating your first brain too.
+The script handles Docker, Ollama, downloading models — all of it. It can also walk you through making your first brain.
 
 ---
 
-## Using it
+## How to use it
 
-1. Type what you want in the chat. The Architect builds a brain from your description.
-2. Click "Activate Agent" and talk to it in the Agent panel.
-3. Export as a `.brain` file when you're done.
+1. Describe what you want in the chat. The Architect builds a brain from it.
+2. Hit "Activate Agent" and talk to your brain.
+3. Export as a `.brain` file when you're happy with it.
 
 ### Terminal
 
@@ -71,14 +71,14 @@ node tui/dist/cli.js your-brain.brain --once "Analyze Nike's marketing"
 
 ### Fine-tuning
 
-Type something like "Fine-tune an LLM to summarize city council minutes" in the app. Pick "Train on this machine." Done.
+Type something like "Fine-tune an LLM to summarize city council minutes" in the app. Pick "Train on this machine." It does the rest.
 
-Or from the terminal:
+Or from terminal:
 ```bash
 node tui/dist/cli.js examples/local-finetune-demo.brain --local --once "run the fine-tune"
 ```
 
-Needs Python 3.10+, a CUDA GPU, and `pip install torch peft transformers bitsandbytes`.
+You need Python 3.10+, a CUDA GPU, and `pip install torch peft transformers bitsandbytes`.
 
 ---
 
@@ -97,16 +97,16 @@ Needs Python 3.10+, a CUDA GPU, and `pip install torch peft transformers bitsand
 
 | Key | For |
 | --- | --- |
-| `FIREWORKS_API_KEY` | Cloud LLM and AI Architect (skip if using Ollama) |
+| `FIREWORKS_API_KEY` | Cloud LLM and AI Architect (not needed if using Ollama) |
 | `OLLAMA_URL` | Local models, free, no key |
 | `COMPOSIO_API_KEY` + `COMPOSIO_ACCOUNT_ID` + `COMPOSIO_ENTITY_ID` | GitHub and MCP tools |
 | `HF_TOKEN` | Hugging Face for fine-tuning |
 
-Don't commit your `.env`. It has real keys in it.
+Don't commit your `.env`. It has real keys.
 
 ---
 
-## Project structure
+## How it's built
 
 ```
 src/            Browser app — canvas, AI Architect, chat
@@ -123,41 +123,39 @@ workspace/      Your data, mounted in Docker
 
 ---
 
-## What's next
+## What's coming
 
-I'm turning this into a desktop app. Right now you have to run Docker, use the terminal, deal with setup scripts — that's a lot. A proper desktop app will make it way easier to just open and use. That's the next big thing.
+Right now you have to run Docker, mess with setup scripts, use the terminal. That's a lot. I'm building a desktop app so you can just open it and go. That's the next big thing.
 
-I'm also working on:
-- A graph compiler — turning `.brain` files into real code
-- Reusable packages — brains you can install like libraries
-- Full local stack — everything on your machine, no cloud
-- A plugin ecosystem — custom nodes built on MCP
+Also working on:
+- Graph compiler — turn `.brain` files into real code
+- Reusable packages — brains you install like libraries
+- Full local stack — no cloud needed
+- Plugin system — custom nodes built on MCP
 
 ---
 
 ## Known issues
 
-Here's what's broken:
-
-1. Docker can't fine-tune locally — no GPU or Python in the container. Use the host runtime.
-2. On Windows, use `127.0.0.1` not `localhost`. IPv6 causes issues.
+1. Docker can't fine-tune locally. No GPU or Python in the container. Use the host runtime.
+2. On Windows, use `127.0.0.1` instead of `localhost`. IPv6 causes problems.
 3. Browser caches old bundles. Hard-refresh (Ctrl+F5) after rebuilding.
 4. Some nodes are lightly tested — `imagegen`, certain `trigger`/`gate` flows, `python`.
 5. Cloud fine-tuning needs a Fireworks key.
 6. First local fine-tune downloads the base model (~3GB). Slow once, fast after.
-7. Vague prompts give generic graphs — the Architect skips clarifying questions right now.
+7. Vague prompts give generic graphs.
 
 ---
 
 ## Why
 
-I think node graphs are how we'll build agents eventually.
+I think node graphs are how we'll eventually build agents.
 
-Building an agent right now means writing code. While loops, if chains, function calls. It's plumbing. Agents are really graphs — a trigger feeds an input, the input feeds a model, the model feeds a tool, the tool feeds a decision. We just don't have good tools for designing them visually yet.
+Right now you write code — loops, if chains, function calls. It's plumbing. But agents are really graphs: trigger → input → model → tool → decision. We just don't have good tools for building them visually.
 
-OpenBrain is my attempt. Every node is real and runnable. The machine designs the graph from a sentence. `.brain` files move between any runtime.
+OpenBrain is that tool. Every node is real. The machine designs the graph from a sentence. `.brain` files work everywhere.
 
-Early days. Bugs everywhere. But the bones are there and I'm keeping at it.
+Still early. Still buggy. But it's real and I'm keeping at it.
 
 ---
 
