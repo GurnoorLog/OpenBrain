@@ -1,123 +1,84 @@
 # OpenBrain
 
-> **Still in beta.** This is the bare minimum — just the foundation. I have a
-> long way to go before it's fully usable, so please forgive me if something
-> doesn't work. But you can watch the video for a full feature showcase:
-> **[Watch the demo](https://youtu.be/tX9TiHpuJhE?si=FQzuDhMjM4sVOkWC)**
+> **Beta.** I'm still working on this. Stuff will break. Forgive me.
+> For a full walkthrough of what it does, watch the video:
+> [Watch the demo](https://youtu.be/tX9TiHpuJhE?si=FQzuDhMjM4sVOkWC)
 
 **Build AI agents by drawing them.**
 
-OpenBrain is a local-first platform where you design AI agents as visual node graphs. Drag nodes around, connect them, and watch your agent come to life. You can even describe what you want in plain English and an AI Architect will build the graph for you.
-
-Your data stays on your machine. No cloud required.
+You design AI agents as visual node graphs — drag nodes around, connect them, and they become something that actually runs. You can also just describe what you want in plain English and an AI Architect builds the whole graph for you. Your data stays on your machine.
 
 ---
 
 ## What is this?
 
-Think of it like Unreal Engine's Blueprint system, but for AI agents instead of games. Each node is a real capability — an LLM call, a web search, a file operation, a fine-tune, a scheduled trigger. Connect them together and you get an agent that actually runs.
+You know Unreal Engine's Blueprints? Same idea, but for AI agents instead of games. Each node is a real thing your agent can do — call an LLM, search the web, read a file, run Python, fine-tune a model. Connect them and you've got an agent.
 
-The best part? You don't have to be technical to use it. Just tell the AI what you want:
+Tell the AI what you want:
 
 > "Create a market research agent that analyzes a company's marketing and suggests improvements"
 
-And it builds the whole thing for you, node by node, right on the canvas.
+It figures out the nodes, the reasoning, the connections. Builds it on the canvas while you watch.
 
 ---
 
-## Features
+## What's in here
 
-**Visual Canvas** — Drag and drop nodes, connect them with edges, and watch your agent take shape. It feels like building with LEGOs, but for AI.
+**Visual canvas.** Drag, drop, connect. Like building with blocks, except the blocks do things.
 
-**AI Architect** — Describe what you want in a sentence. The Architect designs the entire graph for you, explaining its reasoning as it goes.
+**AI Architect.** Describe what you want. It designs the graph and explains why it picked each node.
 
-**Run Anywhere** — Use the browser app, a terminal (TUI), a REST API, or schedule agents to run automatically. Same `.brain` file works everywhere.
+**Run it anywhere.** Browser app, terminal, REST API, cron job — same `.brain` file works in all of them.
 
-**Fine-tune on Your GPU** — Want to train a model on your own hardware? The self-adaptive trainer figures out what your GPU can handle and does it. No configuration needed.
+**Fine-tune on your GPU.** The trainer checks your hardware (CUDA, VRAM, what you've got) and picks a model that fits. 4GB laptop or A100, doesn't matter. No setup.
 
-**Real Tool Nodes** — This isn't a toy. You get LLM calls, web browsing, file I/O, GitHub integration, MCP servers, RAG, Python execution, image generation, and more.
+**Real tools, not demos.** LLM calls, web browsing, file I/O, GitHub, MCP servers, RAG, Python, image generation. They actually run.
 
-**Portable `.brain` Files** — Export your agent as a single JSON file. Share it, version control it, run it on another machine. It just works.
+**`.brain` files.** Export your agent as one file. Move it, share it, version control it.
 
 ---
 
-## Quick Start
-
-### Option 1: Clone and run (recommended)
+## Quick start
 
 ```bash
 git clone https://github.com/GurnoorLog/OpenBrain.git
 cd OpenBrain
-```
 
-**macOS / Linux:**
-```bash
+# macOS / Linux
 bash setup.sh
-```
 
-**Windows PowerShell:**
-```powershell
+# Windows PowerShell
 .\setup.ps1
 ```
 
-The setup script handles everything — Docker, Ollama, model downloads, the works. It'll even walk you through creating your first brain if you want.
-
-### Option 2: Docker only
-
-```bash
-docker pull praknoor/openbrain-runtime:0.1.3
-docker run -d -p 8080:8080 --name openbrain-runtime praknoor/openbrain-runtime:0.1.3
-```
-
-Then open **http://127.0.0.1:8080** in your browser.
-
-> For the full guided experience (Ollama setup, API keys, walkthrough), follow the
-> [complete setup instructions](https://github.com/GurnoorLog/OpenBrain#how-to-run-it).
+The script handles Docker, Ollama, model downloads — everything. It can walk you through creating your first brain too.
 
 ---
 
-## Using the app
+## Using it
 
-1. **Create a brain** — Type what you want in the chat box. The AI Architect builds it for you.
-2. **Run it** — Click "Activate Agent" and chat with your brain in the Agent panel.
-3. **Export it** — Save as a `.brain` file and take it anywhere.
+1. Type what you want in the chat. The Architect builds a brain from your description.
+2. Click "Activate Agent" and talk to it in the Agent panel.
+3. Export as a `.brain` file when you're done.
 
-### Running in the terminal
+### Terminal
 
 ```bash
-# Build the TUI (one-time)
 cd tui && npm install && npm run build && cd ..
-
-# Chat with a brain
 node tui/dist/cli.js your-brain.brain
-
-# One-shot question
-node tui/dist/cli.js your-brain.brain --once "Analyze Nike's marketing strategy"
+node tui/dist/cli.js your-brain.brain --once "Analyze Nike's marketing"
 ```
 
-### Fine-tuning locally
+### Fine-tuning
 
-Type a fine-tune prompt in the app:
-
-> "Fine-tune an LLM to summarize city council minutes into plain language"
-
-Pick "Train on this machine" in the confirmation modal and watch it go. It works on any CUDA GPU — from a 4GB laptop to an A100. No setup required.
+Type something like "Fine-tune an LLM to summarize city council minutes" in the app. Pick "Train on this machine." Done.
 
 Or from the terminal:
 ```bash
 node tui/dist/cli.js examples/local-finetune-demo.brain --local --once "run the fine-tune"
 ```
 
-Requires: Python 3.10+, CUDA GPU, `pip install torch peft transformers bitsandbytes`.
-
----
-
-## Stopping and restarting
-
-```bash
-docker compose down     # stop everything
-docker compose up -d    # start again
-```
+Needs Python 3.10+, a CUDA GPU, and `pip install torch peft transformers bitsandbytes`.
 
 ---
 
@@ -132,67 +93,71 @@ docker compose up -d    # start again
 
 ---
 
-## API Keys
+## API keys
 
-| Key | What it's for |
+| Key | For |
 | --- | --- |
-| `FIREWORKS_API_KEY` | Cloud LLM and AI Architect (optional if using Ollama) |
-| `OLLAMA_URL` | Local models (free, no key needed) |
-| `COMPOSIO_API_KEY` + `COMPOSIO_ACCOUNT_ID` + `COMPOSIO_ENTITY_ID` | GitHub and MCP tool nodes |
-| `HF_TOKEN` | Hugging Face (for fine-tuning datasets/models) |
+| `FIREWORKS_API_KEY` | Cloud LLM and AI Architect (skip if using Ollama) |
+| `OLLAMA_URL` | Local models, free, no key |
+| `COMPOSIO_API_KEY` + `COMPOSIO_ACCOUNT_ID` + `COMPOSIO_ENTITY_ID` | GitHub and MCP tools |
+| `HF_TOKEN` | Hugging Face for fine-tuning |
 
-**Don't commit your `.env` file.** It contains live API keys.
+Don't commit your `.env`. It has real keys in it.
 
 ---
 
-## How it's built
+## Project structure
 
 ```
-src/            Browser app — canvas, AI Architect, chat, reports
-runtime/        Local runtime server — /run, /local/finetune, /agents
-cloud-executor/ Shared graph executor (brain-core.js)
-cli/            Command-line brain tools
-sdk/            .brain file format and plugin API
-tui/            Terminal UI — run .brain files as chat agents
-skills/         Curated sub-brain libraries for worker nodes
-plugins/        Plugin API for custom nodes and providers
-knowledge/      Local knowledge base for RAG nodes
-workspace/      Your data — brains, finetunes, files (mounted in Docker)
+src/            Browser app — canvas, AI Architect, chat
+runtime/        Runtime server — /run, /local/finetune, /agents
+cloud-executor/ Graph executor (brain-core.js)
+cli/            Command-line tools
+sdk/            .brain format + plugin API
+tui/            Terminal UI
+skills/         Sub-brain libraries for worker nodes
+plugins/        Plugin API
+knowledge/      RAG knowledge base
+workspace/      Your data, mounted in Docker
 ```
 
-See `ARCHITECTURE.md` for the deep dive and `ROADMAP.md` for what's coming next.
+---
+
+## What's next
+
+I'm turning this into a desktop app. Right now you have to run Docker, use the terminal, deal with setup scripts — that's a lot. A proper desktop app will make it way easier to just open and use. That's the next big thing.
+
+I'm also working on:
+- A graph compiler — turning `.brain` files into real code
+- Reusable packages — brains you can install like libraries
+- Full local stack — everything on your machine, no cloud
+- A plugin ecosystem — custom nodes built on MCP
 
 ---
 
 ## Known issues
 
-Being honest — this is early stage, not a finished product. Here's what's rough:
+Here's what's broken:
 
-1. **Docker can't fine-tune locally** — the container has no GPU or Python. Use the host runtime for local training.
-2. **Use `127.0.0.1`, not `localhost`** — on Windows, `localhost` can resolve to IPv6 which causes connection issues.
-3. **Browser caches old bundles** — hard-refresh (Ctrl+F5) after a rebuild.
-4. **Some node types are lightly tested** — `imagegen`, certain `trigger`/`gate` flows, and the `python` node work but haven't been battle-hardened.
-5. **Cloud fine-tuning needs a Fireworks key** — without one, the Architect will let you know it's not configured.
-6. **First local fine-tune downloads the base model** (~3GB) — looks stuck on slow connections, but subsequent runs are instant.
-7. **The Architect skips clarifying questions** — very vague prompts might produce a generic graph.
+1. Docker can't fine-tune locally — no GPU or Python in the container. Use the host runtime.
+2. On Windows, use `127.0.0.1` not `localhost`. IPv6 causes issues.
+3. Browser caches old bundles. Hard-refresh (Ctrl+F5) after rebuilding.
+4. Some nodes are lightly tested — `imagegen`, certain `trigger`/`gate` flows, `python`.
+5. Cloud fine-tuning needs a Fireworks key.
+6. First local fine-tune downloads the base model (~3GB). Slow once, fast after.
+7. Vague prompts give generic graphs — the Architect skips clarifying questions right now.
 
 ---
 
-## Why I built this
+## Why
 
-I believe **node graphs are the next programming language**.
+I think node graphs are how we'll build agents eventually.
 
-In Unreal Engine, you don't write C++ to place a door — you place a node, connect it, and the engine does the rest. Software agents are fundamentally graphs: a trigger feeds an input, the input feeds a model, the model feeds a tool, the tool feeds a decision. Yet today we write all that plumbing by hand in code.
+Building an agent right now means writing code. While loops, if chains, function calls. It's plumbing. Agents are really graphs — a trigger feeds an input, the input feeds a model, the model feeds a tool, the tool feeds a decision. We just don't have good tools for designing them visually yet.
 
-OpenBrain is my attempt to let people **program with nodes** — visual, composable, self-documenting graphs where every node is a real, runnable capability. And where the machine can design the graph for you from a sentence.
+OpenBrain is my attempt. Every node is real and runnable. The machine designs the graph from a sentence. `.brain` files move between any runtime.
 
-Where this is going:
-- **A graph compiler** — compile `.brain` graphs to type-checked code
-- **Reusable packages** — brains that ship like libraries, installable and composable
-- **Full local stack** — everything runs on your hardware, even offline
-- **A plugin ecosystem** — nodes as a marketplace, built on MCP
-
-It's early. There are bugs and rough edges. But the foundation is real — and I'm keeping at it.
+Early days. Bugs everywhere. But the bones are there and I'm keeping at it.
 
 ---
 
