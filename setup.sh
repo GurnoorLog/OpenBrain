@@ -80,8 +80,8 @@ if [ "$LLM_CHOICE" != "2" ]; then
     echo -e "  ${G}Ollama is running on your machine!${N}"
     echo ""
 
-    # Get model names
-    MODELS=$(curl -s http://127.0.0.1:11434/api/tags | grep -o '"name":"[^"]*"' | sed 's/"name":"//;s/"//' || true)
+    # Get model names using ollama list (more reliable than parsing JSON)
+    MODELS=$(ollama list 2>/dev/null | tail -n +2 | awk '{print $1}' || true)
 
     if [ -n "$MODELS" ]; then
       echo -e "  ${W}Your installed models:${N}"
