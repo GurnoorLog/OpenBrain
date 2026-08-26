@@ -39,5 +39,6 @@ runtime/.runtime-cache
 unsloth_compiled_cache
 runtime/unsloth_compiled_cache
 
-# Markdown docs
+# Docs (except README)
 *.md
+!README.md
