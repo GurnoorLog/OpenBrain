@@ -218,6 +218,19 @@ echo -e "  ${G}  OpenBrain is ready!${N}"
 echo -e "  ${C}  http://127.0.0.1:8080${N}"
 echo ""
 
+echo -e "  ${D}Waiting for server to start...${N}"
+SERVER_READY=0
+for i in $(seq 1 30); do
+  if curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:8080 2>/dev/null | grep -qE "^[23]"; then
+    SERVER_READY=1
+    break
+  fi
+  sleep 2
+done
+if [ "$SERVER_READY" -ne 1 ]; then
+  echo -e "  ${Y}Server still starting. Try http://127.0.0.1:8080 in a few seconds.${N}"
+fi
+
 # =====================================================
 #  GUIDED WALKTHROUGH
 # =====================================================
@@ -238,10 +251,14 @@ if [ "$WALK_CHOICE" = "1" ]; then
   echo ""
 
   echo -e "  ${W}Opening OpenBrain in your browser...${N}"
-  if command -v open &> /dev/null; then
-    open "http://127.0.0.1:8080"
-  elif command -v xdg-open &> /dev/null; then
-    xdg-open "http://127.0.0.1:8080"
+  if [ "$SERVER_READY" -eq 1 ]; then
+    if command -v open &> /dev/null; then
+      open "http://127.0.0.1:8080"
+    elif command -v xdg-open &> /dev/null; then
+      xdg-open "http://127.0.0.1:8080"
+    fi
+  else
+    echo -e "  ${Y}Server not ready yet. Open http://127.0.0.1:8080 manually in a moment.${N}"
   fi
   echo ""
 
@@ -330,10 +347,14 @@ else
 
   echo ""
   echo -e "  ${W}Opening OpenBrain in your browser...${N}"
-  if command -v open &> /dev/null; then
-    open "http://127.0.0.1:8080"
-  elif command -v xdg-open &> /dev/null; then
-    xdg-open "http://127.0.0.1:8080"
+  if [ "$SERVER_READY" -eq 1 ]; then
+    if command -v open &> /dev/null; then
+      open "http://127.0.0.1:8080"
+    elif command -v xdg-open &> /dev/null; then
+      xdg-open "http://127.0.0.1:8080"
+    fi
+  else
+    echo -e "  ${Y}Server not ready yet. Open http://127.0.0.1:8080 manually in a moment.${N}"
   fi
   echo ""
   echo -e "  ${C}http://127.0.0.1:8080${N}"

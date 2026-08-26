@@ -221,6 +221,21 @@ Write-Host "  OpenBrain is ready!" -ForegroundColor Green
 Write-Host "  http://127.0.0.1:8080" -ForegroundColor Cyan
 Write-Host ""
 
+Write-Host "  Waiting for server to start..." -ForegroundColor DarkGray
+$serverReady = $false
+for ($i = 0; $i -lt 30; $i++) {
+    try {
+        $null = Invoke-WebRequest -Uri "http://127.0.0.1:8080" -TimeoutSec 2 -UseBasicParsing -ErrorAction Stop
+        $serverReady = $true
+        break
+    } catch {
+        Start-Sleep -Seconds 2
+    }
+}
+if (-not $serverReady) {
+    Write-Host "  Server still starting. Try http://127.0.0.1:8080 in a few seconds." -ForegroundColor Yellow
+}
+
 # =====================================================
 #  GUIDED WALKTHROUGH
 # =====================================================
@@ -241,7 +256,11 @@ if ($walkChoice -eq "1") {
     Write-Host ""
 
     Write-Host "  Opening OpenBrain in your browser..." -ForegroundColor White
-    Start-Process "http://127.0.0.1:8080"
+    if ($serverReady) {
+        Start-Process "http://127.0.0.1:8080"
+    } else {
+        Write-Host "  Server not ready yet. Open http://127.0.0.1:8080 manually in a moment." -ForegroundColor Yellow
+    }
     Write-Host ""
 
     Write-Host "  You should see a blank canvas and a chat box at the bottom." -ForegroundColor White
@@ -335,7 +354,11 @@ if ($walkChoice -eq "1") {
 
     Write-Host ""
     Write-Host "  Opening OpenBrain in your browser..." -ForegroundColor White
-    Start-Process "http://127.0.0.1:8080"
+    if ($serverReady) {
+        Start-Process "http://127.0.0.1:8080"
+    } else {
+        Write-Host "  Server not ready yet. Open http://127.0.0.1:8080 manually in a moment." -ForegroundColor Yellow
+    }
     Write-Host ""
     Write-Host "  http://127.0.0.1:8080" -ForegroundColor Cyan
     Write-Host ""
