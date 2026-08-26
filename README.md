@@ -1,18 +1,18 @@
 # OpenBrain
 
-> **Still beta.** I'm building this as I go. Things will break. Sorry about that.
-> Here's a video showing what it does right now:
-> [Watch the demo](https://youtu.be/tX9TiHpuJhE?si=FQzuDhMjM4sVOkWC)
+Still beta. I'm building this as I go. Things will break, and I'm sorry about that.
+Here's a video showing what it actually does right now:
+[Watch the demo](https://youtu.be/tX9TiHpuJhE?si=FQzuDhMjM4sVOkWC)
 
-**You draw AI agents and they just work.**
+You draw AI agents and they just work.
 
-That's the idea. You drag nodes around a canvas, wire them up, and you've got an agent. Or you type a sentence and an AI builds the whole graph for you. Everything runs on your machine.
+That's the whole idea. You drag nodes around a canvas, wire them up, and you've got an agent. Or you type a sentence and an AI builds the whole graph for you. Everything runs on your machine.
 
 ---
 
 ## What is this
 
-Think Unreal Engine Blueprints, but for AI. Each node on the canvas does something real — calls an LLM, grabs a webpage, reads a file, runs code, whatever. Connect them and you have an agent.
+Think Unreal Engine Blueprints, but for AI. Each node on the canvas does something real. Calls an LLM. Grabs a webpage. Reads a file. Runs code. Connect them and you have an agent.
 
 Or just tell the AI what you want:
 
@@ -28,7 +28,7 @@ It builds the graph for you. You watch it happen.
 
 **AI Architect.** Say what you want. It figures out the nodes and why each one matters.
 
-**Works everywhere.** Browser, terminal, REST API, scheduled jobs — same `.brain` file in all of them.
+**Works everywhere.** Browser, terminal, REST API, scheduled jobs. Same `.brain` file in all of them.
 
 **Fine-tune on your GPU.** The trainer looks at your hardware and picks a model that fits. Doesn't matter if you've got a 4GB laptop or an A100.
 
@@ -51,7 +51,7 @@ bash setup.sh
 .\setup.ps1
 ```
 
-The script handles Docker, Ollama, downloading models — all of it. It can also walk you through making your first brain.
+The script handles Docker, Ollama, downloading models. All of it. It can also walk you through making your first brain.
 
 ---
 
@@ -109,8 +109,8 @@ Don't commit your `.env`. It has real keys.
 ## How it's built
 
 ```
-src/            Browser app — canvas, AI Architect, chat
-runtime/        Runtime server — /run, /local/finetune, /agents
+src/            Browser app: canvas, AI Architect, chat
+runtime/        Runtime server: /run, /local/finetune, /agents
 cloud-executor/ Graph executor (brain-core.js)
 cli/            Command-line tools
 sdk/            .brain format + plugin API
@@ -127,11 +127,7 @@ workspace/      Your data, mounted in Docker
 
 Right now you have to run Docker, mess with setup scripts, use the terminal. That's a lot. I'm building a desktop app so you can just open it and go. That's the next big thing.
 
-Also working on:
-- Graph compiler — turn `.brain` files into real code
-- Reusable packages — brains you install like libraries
-- Full local stack — no cloud needed
-- Plugin system — custom nodes built on MCP
+Also working on a graph compiler to turn `.brain` files into real code. Reusable packages so you can install brains like libraries. Full local stack with no cloud needed. And a plugin system built on MCP.
 
 ---
 
@@ -140,9 +136,9 @@ Also working on:
 1. Docker can't fine-tune locally. No GPU or Python in the container. Use the host runtime.
 2. On Windows, use `127.0.0.1` instead of `localhost`. IPv6 causes problems.
 3. Browser caches old bundles. Hard-refresh (Ctrl+F5) after rebuilding.
-4. Some nodes are lightly tested — `imagegen`, certain `trigger`/`gate` flows, `python`.
+4. Some nodes are lightly tested. `imagegen`, certain `trigger`/`gate` flows, `python`.
 5. Cloud fine-tuning needs a Fireworks key.
-6. First local fine-tune downloads the base model (~3GB). Slow once, fast after.
+6. First local fine-tune downloads the base model (around 3GB). Slow once, fast after.
 7. Vague prompts give generic graphs.
 
 ---
@@ -151,7 +147,7 @@ Also working on:
 
 I think node graphs are how we'll eventually build agents.
 
-Right now you write code — loops, if chains, function calls. It's plumbing. But agents are really graphs: trigger → input → model → tool → decision. We just don't have good tools for building them visually.
+Right now you write code. Loops, if chains, function calls. It's plumbing. But agents are really graphs. Trigger, input, model, tool, decision. We just don't have good tools for building them visually.
 
 OpenBrain is that tool. Every node is real. The machine designs the graph from a sentence. `.brain` files work everywhere.
 
@@ -159,4 +155,4 @@ Still early. Still buggy. But it's real and I'm keeping at it.
 
 ---
 
-**OpenBrain — build your own mind.**
+**OpenBrain. Build your own mind.**
