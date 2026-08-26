@@ -1,0 +1,61 @@
+{
+  "format": "openbrain/brain",
+  "version": 1,
+  "id": "4c5730c4-87cf-4d51-87cc-2755ea521707",
+  "name": "Marketing Analyzer",
+  "description": "Analyzes a company or product's marketing strategy: positioning, audience, channels, messaging, pricing, competitors, and recommendations.",
+  "goal": "Given a company, product, or topic, produce a structured marketing analysis with actionable recommendations.",
+  "provider": {
+    "providerId": "fireworks",
+    "model": ""
+  },
+  "memory": {
+    "enabled": true,
+    "kind": "working",
+    "scope": "brain"
+  },
+  "knowledge": {
+    "required": false,
+    "sourceTypes": []
+  },
+  "execution": {
+    "mode": "auto"
+  },
+  "graph": {
+    "nodes": [
+      {
+        "id": "analyst",
+        "type": "llm",
+        "x": 120,
+        "y": 160,
+        "configuration": {
+          "maxTokens": 4096,
+          "temperature": 0.7,
+          "instructions": "You are a senior marketing analyst. The user will give you a company, product, brand, or marketing question. Produce a thorough, well-structured marketing analysis using the following sections. Be specific, cite numbers or examples where possible, and end with actionable recommendations.\n\nSections:\n1. Overview — what the brand/product is and its current market position.\n2. Target Audience — primary and secondary segments, personas.\n3. Positioning & Messaging — value proposition, taglines, key messages.\n4. Channels & Tactics — where and how it markets (social, ads, SEO, content, partnerships), and how effective each likely is.\n5. Pricing & Offers — pricing strategy, promotions, bundling.\n6. Competitive Landscape — main competitors and how it differentiates.\n7. Strengths / Weaknesses / Opportunities / Threats.\n8. Recommendations — 3-5 concrete, prioritized actions with expected impact.\n\nIf the user asks about a specific aspect instead (e.g. 'pricing'), focus the analysis on that and keep other sections brief."
+        }
+      },
+      {
+        "id": "output",
+        "type": "output",
+        "x": 480,
+        "y": 160,
+        "configuration": {}
+      }
+    ],
+    "connections": [
+      {
+        "id": "c1",
+        "from": "analyst",
+        "fromPort": "response",
+        "to": "output",
+        "toPort": "result"
+      }
+    ]
+  },
+  "dependencies": [],
+  "metadata": {
+    "exportedAt": "2026-08-03T11:54:25.308Z",
+    "appVersion": "cli",
+    "tool": "brain init"
+  }
+}

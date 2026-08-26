@@ -1,0 +1,251 @@
+import { useEffect, useRef, useState } from 'react'
+import { runBrain, stopBrainRun } from './canvas/executionAdapter'
+import { runBrainInCloud, stopRunInCloud } from '../core/cloud/cloudExecutor'
+import { exportBrainFile, importBrainFile, shareBrain } from '../core/brainIo'
+import { useBrainStore } from '../store/useBrainStore'
+import { useAuth } from '../core/auth/useAuth'
+import { useNavigation } from '../core/navigation'
+import { updateProject } from '../core/projects/projectsRepository'
+import { buildProjectData } from '../core/projects/projectsRepository'
+import SettingsPanel from './SettingsPanel'
+import BrainChat from './chat/BrainChat'
+
+const MENU_ITEMS = [
+  { id: 'projects', icon: 'lucide:layout-grid', label: 'My Projects' },
+  { id: 'save', icon: 'lucide:save', label: 'Save to project' },
+  { id: 'open-file', icon: 'lucide:folder-open', label: 'Open .brain file' },
+  { id: 'export-file', icon: 'lucide:file-archive', label: 'Export as .brain' },
+  { id: 'settings', icon: 'lucide:settings', label: 'Settings' },
+  { id: 'docs', icon: 'lucide:file-text', label: 'Documentation' },
+  { id: 'support', icon: 'lucide:life-buoy', label: 'Support' },
+  { id: 'signout', icon: 'lucide:log-out', label: 'Sign out' },
+] as const
+
+type MenuItemId = (typeof MENU_ITEMS)[number]['id']
+
+export default function Header() {
+  const [menuOpen, setMenuOpen] = useState(false)
+  const [settingsOpen, setSettingsOpen] = useState(false)
+  const [chatOpen, setChatOpen] = useState(false)
+  const menuRef = useRef<HTMLDivElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const running = useBrainStore((state) => state.running)
+  const { user, guest, signOut } = useAuth()
+  const { go } = useNavigation()
+
+  useEffect(() => {
+    const onClickOutside = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setMenuOpen(false)
+      }
+    }
+    document.addEventListener('click', onClickOutside)
+    return () => document.removeEventListener('click', onClickOutside)
+  }, [])
+
+  // #preview is the shareable link to the built app: opening it on any tab of
+  // the canvas brings the live chat up immediately.
+  useEffect(() => {
+    const onHash = () => {
+      if (window.location.hash === '#preview') setChatOpen(true)
+    }
+    onHash()
+    window.addEventListener('hashchange', onHash)
+    return () => window.removeEventListener('hashchange', onHash)
+  }, [])
+
+  const closeChat = () => {
+    setChatOpen(false)
+    if (window.location.hash === '#preview') {
+      window.history.replaceState(null, '', window.location.pathname + window.location.search)
+    }
+  }
+
+  const onMenuItem = async (id: MenuItemId) => {
+    if (id === 'settings') {
+      setMenuOpen(false)
+      setSettingsOpen(true)
+    }
+    if (id === 'projects') {
+      setMenuOpen(false)
+      go('dashboard')
+    }
+    if (id === 'open-file') {
+      setMenuOpen(false)
+      fileInputRef.current?.click()
+    }
+    if (id === 'export-file') {
+      setMenuOpen(false)
+      exportBrainFile()
+    }
+    if (id === 'save') {
+      setMenuOpen(false)
+      const store = useBrainStore.getState()
+      const { projectId, projectPrompt, projectOwnerId, nodes, connections } = store
+      if (!projectId) {
+        store.addLog('No project is open to save', 'warning')
+        return
+      }
+      if (!user || projectOwnerId !== user.id) {
+        store.addLog(
+          guest
+            ? 'Guest mode autosaves on this machine — use "Export as .brain" to keep a copy'
+            : 'You can only save to projects you own',
+          'warning',
+        )
+        return
+      }
+      try {
+        await updateProject(user.id, projectId, {
+          data: buildProjectData(
+            projectPrompt ?? '',
+            nodes.map(({ id, type, x, y, content, reason, model, configuration }) => ({
+              id,
+              type,
+              x,
+              y,
+              content,
+              reason,
+              model,
+              configuration,
+            })),
+            connections,
+          ),
+        })
+        store.addLog('Saved to project', 'success')
+      } catch (e) {
+        store.addLog(e instanceof Error ? e.message : 'Save failed', 'error')
+      }
+    }
+    if (id === 'signout') {
+      setMenuOpen(false)
+      await signOut()
+      go('landing')
+    }
+  }
+
+  return (
+    <header className="flex items-center justify-between pointer-events-auto">
+      <div className="flex items-center gap-5">
+        <div className="relative group" ref={menuRef}>
+          <button
+            id="pill-menu-trigger"
+            className="pill-menu-btn"
+            onClick={(e) => {
+              e.stopPropagation()
+              setMenuOpen((open) => !open)
+            }}
+            aria-expanded={menuOpen}
+            aria-label="Open menu"
+          >
+            <div className="pill-inner">
+              <div className="dot-black"></div>
+              <div className="dot-black"></div>
+            </div>
+          </button>
+          <div
+            id="main-menu"
+            className={`menu-dropdown absolute top-full left-0 mt-3 w-56 glass-panel p-2 z-50 ${menuOpen ? 'active' : ''}`}
+          >
+            <div className="flex flex-col gap-1">
+              {MENU_ITEMS.map((item) => (
+                <button
+                  key={item.id}
+                  className="flex items-center gap-3 px-3 py-2 text-sm text-gray-400 hover:text-white hover:bg-white/5 rounded-lg transition-all"
+                  onClick={() => onMenuItem(item.id)}
+                >
+                  <iconify-icon icon={item.icon}></iconify-icon>
+                  {item.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 ml-2">
+          <span className="text-white font-bold tracking-tight text-xl">OpenBrain</span>
+          <span className="px-2 py-0.5 bg-teal-500/10 text-teal-400 text-[10px] font-bold uppercase rounded-md border border-teal-500/20">
+            Beta
+          </span>
+        </div>
+      </div>
+
+      <div className="flex items-center gap-3">
+        <button
+          id="nav-play-btn"
+          className={`toolbar-btn hover:text-teal-400 ${running ? 'opacity-40 pointer-events-none' : ''}`}
+          onClick={() => void runBrain()}
+          aria-label="Run brain"
+          title="Run brain"
+        >
+          <iconify-icon icon="lucide:play" className="text-xl"></iconify-icon>
+        </button>
+        <button
+          id="nav-cloud-btn"
+          className={`toolbar-btn hover:text-sky-400 ${running ? 'opacity-40 pointer-events-none' : ''}`}
+          onClick={() => void runBrainInCloud()}
+          aria-label="Run brain in the cloud (Render)"
+          title="Run brain in the cloud (Render)"
+        >
+          <iconify-icon icon="lucide:cloud-cog" className="text-xl"></iconify-icon>
+        </button>
+        <button
+          id="nav-test-btn"
+          className="toolbar-btn hover:text-teal-400"
+          onClick={() => {
+            setChatOpen(true)
+            window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}#preview`)
+          }}
+          aria-label="Test the app — chat with the LLM your brain built"
+          title="Test app — chat with the LLM your brain built"
+        >
+          <iconify-icon icon="lucide:message-square" className="text-xl"></iconify-icon>
+        </button>
+        {running && (
+          <button
+            id="nav-stop-btn"
+            className="toolbar-btn text-red-400 hover:text-red-300"
+            onClick={() => {
+              stopBrainRun()
+              stopRunInCloud()
+            }}
+            aria-label="Stop run"
+            title="Stop run"
+          >
+            <iconify-icon icon="lucide:square" className="text-xl"></iconify-icon>
+          </button>
+        )}
+        <button id="nav-export-btn" className="nav-btn text-gray-300" onClick={exportBrainFile}>
+          <iconify-icon icon="lucide:external-link" className="text-lg"></iconify-icon>
+          Export
+        </button>
+        <button
+          id="nav-share-btn"
+          className="nav-btn text-gray-300"
+          onClick={() => void shareBrain()}
+        >
+          <iconify-icon icon="lucide:share-2" className="text-lg"></iconify-icon>
+          Share
+        </button>
+        <div className="avatar-ring ml-2">
+          <div className="w-9 h-9 rounded-full bg-teal-600 flex items-center justify-center text-white font-bold text-sm border-2 border-[#0c0c0c] shadow-lg cursor-pointer hover:scale-105 transition-transform">
+            {(user?.email?.trim().charAt(0) ?? 'G').toUpperCase()}
+          </div>
+        </div>
+      </div>
+
+      <SettingsPanel open={settingsOpen} onClose={() => setSettingsOpen(false)} />
+      <BrainChat open={chatOpen} onClose={closeChat} />
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".brain,application/json"
+        className="hidden"
+        onChange={(e) => {
+          const file = e.target.files?.[0]
+          if (file) void importBrainFile(file)
+          e.target.value = ''
+        }}
+      />
+    </header>
+  )
+}

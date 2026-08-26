@@ -1,0 +1,16 @@
+{
+  "name": "openbrain-runtime",
+  "version": "1.0.0",
+  "private": true,
+  "description": "OpenBrain Runtime — the local-first engine that serves the Desktop SPA, executes Brains, and owns the user's machine",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.30.0"
+  }
+}

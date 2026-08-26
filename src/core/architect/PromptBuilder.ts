@@ -1,0 +1,384 @@
+import type { NodePort, NodeType, ProviderConfiguration, ProviderId, ProviderKind, ProviderMessage } from '../domain'
+import type { DesignRequest } from './ArchitectProvider'
+import { FIREWORKS_MODELS } from '../providers/fireworksModels'
+import {
+  MCP_SERVERS,
+  MCP_SERVER_NAMES,
+  mcpBrandForServer,
+  mcpToolHints,
+  serverKindLabel,
+} from '../mcp/servers'
+import { SKILL_CATALOG } from '../skills/skillLibrary'
+
+export interface NodeCatalogEntry {
+  readonly type: NodeType
+  readonly description: string
+  readonly inputs: readonly NodePort[]
+  readonly outputs: readonly NodePort[]
+}
+
+export const NODE_CATALOG: readonly NodeCatalogEntry[] = [
+  {
+    type: 'llm',
+    description: 'Reason and generate language',
+    inputs: [{ id: 'context', label: 'Context', kind: 'text' }],
+    outputs: [{ id: 'response', label: 'Response', kind: 'text' }],
+  },
+  {
+    type: 'local',
+    description: 'Run a model in the browser, no API key',
+    inputs: [{ id: 'context', label: 'Context', kind: 'text' }],
+    outputs: [{ id: 'response', label: 'Response', kind: 'text' }],
+  },
+  {
+    type: 'memory',
+    description: 'Persist conversation context',
+    inputs: [{ id: 'value', label: 'Value', kind: 'any' }],
+    outputs: [{ id: 'stored', label: 'Stored', kind: 'any' }],
+  },
+  {
+    type: 'planner',
+    description: 'Break goals into steps',
+    inputs: [{ id: 'goal', label: 'Goal', kind: 'text' }],
+    outputs: [{ id: 'plan', label: 'Plan', kind: 'list' }],
+  },
+  {
+    type: 'browser',
+    description:
+      'Fetch the text of a live web page. MUST set the concrete page URL in "configuration" as { "url": "https://..." } — use the exact page the user names (e.g. a Wikipedia article)',
+    inputs: [{ id: 'url', label: 'URL', kind: 'text' }],
+    outputs: [
+      { id: 'pages', label: 'Pages', kind: 'list' },
+      { id: 'content', label: 'Content', kind: 'text' },
+    ],
+  },
+  {
+    type: 'github',
+    description:
+      'Run a real GitHub operation through the native "github" MCP server. MUST set "configuration" as { "mcpServer": "github", "tool": "github/<tool>", "arguments": { ... } }. Example tools: github/get_repository ({"owner","repo"}), github/list_repositories ({}), github/search_repositories ({"q"}), github/list_issues ({"owner","repo"}), github/get_file_contents ({"owner","repo","path"}).',
+    inputs: [
+      { id: 'owner', label: 'Owner', kind: 'text' },
+      { id: 'repo', label: 'Repo', kind: 'text' },
+    ],
+    outputs: [
+      { id: 'repos', label: 'Repos', kind: 'list' },
+      { id: 'result', label: 'Result', kind: 'text' },
+    ],
+  },
+  {
+    type: 'filesystem',
+    description: 'Read and write local files',
+    inputs: [{ id: 'path', label: 'Path', kind: 'text' }],
+    outputs: [{ id: 'content', label: 'Content', kind: 'text' }],
+  },
+  {
+    type: 'python',
+    description: 'Run Python scripts',
+    inputs: [{ id: 'code', label: 'Code', kind: 'text' }],
+    outputs: [{ id: 'result', label: 'Result', kind: 'text' }],
+  },
+  {
+    type: 'rag',
+    description: 'Retrieve from knowledge base',
+    inputs: [{ id: 'query', label: 'Query', kind: 'text' }],
+    outputs: [{ id: 'documents', label: 'Documents', kind: 'list' }],
+  },
+  {
+    type: 'finetune',
+    description: 'Train a model on a dataset (dry-run: plan only, never submits)',
+    inputs: [
+      { id: 'dataset', label: 'Dataset', kind: 'text' },
+      { id: 'baseModel', label: 'Base model', kind: 'text' },
+    ],
+    outputs: [{ id: 'model', label: 'Trained model', kind: 'text' }],
+  },
+  {
+    type: 'news',
+    description:
+      'Fetch live news articles for a topic (requires a paid NewsAPI key — only use when the user explicitly asks for current news headlines; for general web research use the browser node instead)',
+    inputs: [{ id: 'query', label: 'Query', kind: 'text' }],
+    outputs: [
+      { id: 'articles', label: 'Articles', kind: 'list' },
+      { id: 'headline', label: 'Headline', kind: 'text' },
+    ],
+  },
+  {
+    type: 'imagegen',
+    description: 'Generate an image from a prompt',
+    inputs: [{ id: 'prompt', label: 'Prompt', kind: 'text' }],
+    outputs: [{ id: 'imageUrl', label: 'Image URL', kind: 'text' }],
+  },
+  {
+    type: 'output',
+    description: 'Deliver the final result; downloads a Markdown report',
+    inputs: [
+      { id: 'result', label: 'Result', kind: 'any' },
+      { id: 'download', label: 'Download report', kind: 'boolean' },
+    ],
+    outputs: [],
+  },
+  {
+    type: 'mcp',
+    description:
+      'Execute a tool on a configured Model Context Protocol server (replaced at prompt time with the live server list)',
+    inputs: [{ id: 'input', label: 'Input', kind: 'any' }],
+    outputs: [{ id: 'result', label: 'Result', kind: 'any' }],
+  },
+  {
+    type: 'agent',
+    description: 'Delegate to a sub-agent',
+    inputs: [{ id: 'task', label: 'Task', kind: 'text' }],
+    outputs: [{ id: 'result', label: 'Result', kind: 'any' }],
+  },
+  {
+    type: 'subbrain',
+    description: 'Invoke another Brain',
+    inputs: [],
+    outputs: [{ id: 'result', label: 'Result', kind: 'any' }],
+  },
+  {
+    type: 'trigger',
+    description: 'Start a flow on an event',
+    inputs: [],
+    outputs: [{ id: 'signal', label: 'Signal', kind: 'any' }],
+  },
+  {
+    type: 'gate',
+    description: 'Branch on a condition',
+    inputs: [{ id: 'condition', label: 'Condition', kind: 'boolean' }],
+    outputs: [{ id: 'passed', label: 'Passed', kind: 'any' }],
+  },
+  {
+    type: 'worker',
+    description:
+      'Delegate a subtask to a reusable sub-brain — an existing "agent"/"subbrain" brain from the project OR a curated skill from the Available sub-brains list. Set "configuration": { "brain": "<brain id, skill id, or name>", "input": "optional literal to pass to the worker" }. The sub-brain/skill runs as its own pipeline and its result returns through the "result" port. Prefer this over a huge single graph when the request is an autonomous agent with many daily subtasks, or when a listed skill matches a subtask.',
+    inputs: [{ id: 'input', label: 'Input', kind: 'any' }],
+    outputs: [{ id: 'result', label: 'Result', kind: 'any' }],
+  },
+  {
+    type: 'tool',
+    description: 'Run a local tool',
+    inputs: [{ id: 'input', label: 'Input', kind: 'any' }],
+    outputs: [{ id: 'result', label: 'Result', kind: 'any' }],
+  },
+]
+
+export function getNodeCatalogEntry(type: NodeType): NodeCatalogEntry | undefined {
+  return NODE_CATALOG.find((entry) => entry.type === type)
+}
+
+export interface ProviderCatalogEntry {
+  readonly id: ProviderId
+  readonly name: string
+  readonly kind: ProviderKind
+  readonly defaultModel: string
+}
+
+export const PROVIDER_CATALOG: readonly ProviderCatalogEntry[] = [
+  { id: 'fireworks', name: 'Fireworks AI', kind: 'cloud', defaultModel: 'accounts/fireworks/models/deepseek-v4-flash' },
+  { id: 'ollama', name: 'Ollama', kind: 'local', defaultModel: 'qwen2.5:7b' },
+]
+
+export interface PromptBuildOptions {
+  readonly provider?: ProviderConfiguration
+  readonly temperature?: number
+  readonly maxTokens?: number
+}
+
+export interface StructuredPrompt {
+  readonly messages: readonly ProviderMessage[]
+  readonly temperature: number
+  readonly maxTokens: number
+}
+
+export class PromptBuilder {
+  build(request: DesignRequest, options: PromptBuildOptions = {}): StructuredPrompt {
+    return {
+      messages: [
+        { role: 'system', content: this.buildSystemPrompt(options) },
+        { role: 'user', content: this.buildUserPrompt(request) },
+      ],
+      temperature: options.temperature ?? 0.4,
+      maxTokens: options.maxTokens ?? 16384,
+    }
+  }
+
+  buildSystemPrompt(options: PromptBuildOptions = {}): string {
+    return [
+      this.instructions(),
+      this.nodeCatalogPrompt(),
+      this.skillsPrompt(),
+      this.providerCatalogPrompt(options.provider),
+      this.capabilitiesPrompt(),
+      this.outputSchemaPrompt(),
+    ].join('\n\n')
+  }
+
+  buildUserPrompt(request: DesignRequest): string {
+    const parts: string[] = [request.prompt]
+    const context = request.context
+    if (context) {
+      const lines: string[] = []
+      if (context.providerId) lines.push(`Preferred provider: ${context.providerId}`)
+      if (context.model) lines.push(`Preferred model: ${context.model}`)
+      if (context.constraints && context.constraints.length > 0) {
+        lines.push(`Constraints: ${context.constraints.join(', ')}`)
+      }
+      if (lines.length > 0) parts.push(`Context:\n${lines.join('\n')}`)
+    }
+    return parts.join('\n\n')
+  }
+
+  private instructions(): string {
+    return [
+      'You are the AI Architect for OpenBrain.',
+      'You translate a natural-language request into a precise, executable Brain specification.',
+      'Design is reasoning-only: you never run code, access a canvas, or touch execution.',
+      'Prefer the smallest acyclic graph that satisfies the request.',
+      'Respond with one JSON object only - no markdown, no prose outside the JSON.',
+      '',
+      'STRICT GRAPH RULES (violating these invalidates your answer):',
+      '- Your graph MUST contain exactly one "output" node and at least one "llm" node.',
+      '- Every node type you use MUST be from the Available node types list below.',
+      '- Every edge source/target MUST reference a node id you declared in "nodes".',
+      '- Edges MUST form an acyclic graph - no cycles, no self-loops. Each node must not have multiple parents unless it truly combines them.',
+      '- Keep the graph small and linear for simple requests: an input source, an llm, then the "output" node.',
+      '- A typical/healthy answer has 3-5 nodes. A degenerate 1-2 node answer is a FAILURE.',
+      '- The "output" node MUST be present and MUST be the final sink - every pipeline must flow into it.',
+      '- Node ids must be unique, lowercase words separated by dashes (e.g. "recipe-llm", "kitchen-data").',
+      '- Edges describe data flow; the last edge must target the "output" node.',
+      '- Explicit capabilities the user NAMES in their request MUST be realized as the matching node type and wired into the graph. Memory ("remember", "persist context") => a "memory" node; "browse the web" / live pages => a "browser" node; image generation => an "imagegen" node; current news headlines => a "news" node. Do not mention the capability without adding its node.',
+      '- For any request to "browse the web", "research on the web", or "gather information from websites", use the "browser" node and set its concrete target URL in "configuration" ({ "url": "https://..." }). Prefer "browser" over "news" unless the user explicitly asks for live news headlines.',
+      '- The "news" node requires a paid external API key — avoid it for general research; a research assistant that "browses the web" MUST use "browser", not "news".',
+      '- If the user NAMES an external service that appears in the configured MCP server list (Stripe, Supabase, GitHub, filesystem, …), realize it as an "mcp" node (or "github" for GitHub) with "configuration" = { "mcpServer": "<server>", "tool": "<server>/<tool>", "arguments": { ... } } using ONLY the servers and example tools listed for the "mcp" node type. Wire the mcp node\'s "result" into the "llm" node so the model reads its output. Never mention the service without adding its node.',
+      '- Every data source node you add (browser, filesystem, news, imagegen) MUST connect its output into the "llm" node so the model actually reads that data; a source node whose output reaches nobody is a FAILURE.',
+      '- Give EVERY "llm" node a real identity and task in its "configuration.instructions" — a concise role/system prompt describing exactly what that model does (e.g. for research: "You are a research assistant. Answer using ONLY the provided source text; summarize and compare sources; cite them; output markdown."). The model uses this as its system prompt, so without it the LLM answers as a generic chatbot.',
+      '- Add a "rag" node when the request references documents, a knowledge base, a dataset, or "your docs"/"RAG": the rag node retrieves relevant context for the llm. Otherwise omit it (YAGNI).',
+      '- Cross-run memory pattern (use BOTH): a "memory" READ node with NO incoming edges whose "stored" output feeds the llm node on its "history" input (memory-read -> llm "history") so later runs show "(From memory — prior runs: ...)", AND a "memory" WRITE node that receives the llm node\'s "response" on its "value" input (llm -> memory-write). A single memory node that only writes (llm -> memory) without reading back is a FAILURE. Do not make the llm depend on the write node or you create a cycle.',
+      '- AUTONOMOUS / REPEATING AGENT pattern: when the user asks for an agent that "runs daily", "runs on a schedule", "automates every morning", or similar, set the optional "agent" field (see schema): { "enabled": true, "schedule": { "cron": "0 9 * * *", "timezone": "UTC" } }. Map each recurring daily task to its own "worker" node whose "configuration.brain" names the sub-brain (agent/pipeline) or curated skill that performs it, and keep one "llm" node that decides per run which workers to invoke. Set "executionMode" to "auto" so a scheduled run flows through the graph. When a task in the Available sub-brains list matches, reference its exact id — the worker executor runs it as its own pipeline.',
+      '- SKILL ROUTING: the Available sub-brains list defines curated specialist skills (TDD, code review, spec writing, security audit, deck building, API reference, closeout, handoff). Use a "worker" node with "configuration.brain" = the skill id whenever the request (or one of its subtasks) matches that skill\'s use case — the main brain stays small and routes, the skill sub-brain does the specialist work.',
+    ].join('\n')
+  }
+
+  private nodeCatalogPrompt(): string {
+    const lines = NODE_CATALOG.map((entry) => {
+      if (entry.type === 'mcp') return this.mcpCatalogPrompt()
+      const input = entry.inputs.length > 0 ? entry.inputs.map((port) => port.id).join('|') : 'none'
+      const output = entry.outputs.length > 0 ? entry.outputs.map((port) => port.id).join('|') : 'none'
+      return `- ${entry.type}: ${entry.description} (in:${input}, out:${output})`
+    })
+    return `Available node types:\n${lines.join('\n')}`
+  }
+
+  // Curated skills are reusable sub-brains the worker node can delegate to.
+  // Listing their ids and use cases teaches the architect to route matching
+  // subtasks to a specialist sub-brain instead of inlining every step.
+  private skillsPrompt(): string {
+    const lines = SKILL_CATALOG.map(
+      (skill) => `- ${skill.id} ("${skill.name}"): ${skill.description} Use when: ${skill.useWhen.join('; ')}`,
+    )
+    return [
+      'Available sub-brains (curated skills you can delegate to via a "worker" node):',
+      lines.join('\n'),
+      'Set the worker node\'s "configuration" = { "brain": "<skill id>", "input": "<the task>" }.',
+    ].join('\n')
+  }
+
+  // The mcp node is only usable when the user actually has servers configured,
+  // so its description is generated live from the bundled mcp.json. Each entry
+  // names the server and gives real example tool names the executor accepts.
+  private mcpCatalogPrompt(): string {
+    const inOut = '(in:input, out:result)'
+    if (MCP_SERVER_NAMES.length === 0) {
+      return `- mcp: Execute a tool on a Model Context Protocol server. MUST set "configuration" as { "mcpServer": "<server>", "tool": "<server>/<tool>", "arguments": { ... } }. No MCP servers are configured in this build — prefer "browser"/"github"/"filesystem" nodes unless the user asks for a specific service. ${inOut}`
+    }
+    const servers = MCP_SERVER_NAMES.map((name) => {
+      const brand = mcpBrandForServer(name)
+      const hints = mcpToolHints(name).join(', ')
+      return `    - ${name} (${brand.label}, ${serverKindLabel(
+        MCP_SERVERS.find((server) => server.name === name)?.kind ?? 'remote',
+      )}) — example tools: ${hints}`
+    })
+    return [
+      `- mcp: Execute a real tool on a configured Model Context Protocol server. MUST set "configuration" as { "mcpServer": "<server name>", "tool": "<server>/<tool>", "arguments": { ... } } — use ONLY server names and example tools from this list, never invent slugs. Configured servers:`,
+      servers.join('\n'),
+      `  Pick the server whose brand matches the user's request (Stripe → payments, GitHub → repos, Supabase → databases, filesystem → local files). ${inOut}`,
+    ].join('\n')
+  }
+
+  private providerCatalogPrompt(active?: ProviderConfiguration): string {
+    const lines = PROVIDER_CATALOG.map((entry) => `- ${entry.id} (${entry.kind}, default model: ${entry.defaultModel})`)
+    const modelOptions = FIREWORKS_MODELS.map(
+      (model) => `  - ${model.id}${model.recommended ? ' (recommended default)' : ''}: ${model.name} — ${model.description}`,
+    )
+    lines.push('Fireworks AI models you may recommend in "modelRecommendation" (pick the one best matching the request\'s complexity):')
+    lines.push(...modelOptions)
+    if (active) {
+      lines.push(`Active provider for this design: ${active.providerId} (model: ${active.model}).`)
+    }
+    return `Available providers:\n${lines.join('\n')}`
+  }
+
+  private capabilitiesPrompt(): string {
+    return [
+      'Capabilities you may recommend:',
+      '- Memory: working / long-term / episodic / semantic memory scoped to a brain, global, or shared.',
+      '- Knowledge: RAG knowledge bases with chunk size, overlap, and retrieval strategy.',
+      '- Execution: "manual" (user triggers) or "auto" (dependencies run automatically).',
+      `- MCP tools: native Model Context Protocol servers configured in mcp.json${MCP_SERVER_NAMES.length > 0 ? ` (${MCP_SERVER_NAMES.join(', ')})` : ' (none configured yet)'}. An "mcp" node must set configuration.mcpServer and configuration.tool.`,
+    ].join('\n')
+  }
+
+  private outputSchemaPrompt(): string {
+    return [
+      'Return a single JSON object matching this exact shape. ALL fields are REQUIRED unless marked optional:',
+      '{',
+      '  "name": string,',
+      '  "description": string,',
+      '  "goal": string,',
+      '  "providerRecommendation": "fireworks" | "ollama",',
+      '  "modelRecommendation": string,',
+      '  "memoryRecommendation": { "enabled": boolean, "kind": string, "scope": string },',
+      '  "knowledgeRecommendation": { "required": boolean, "sourceTypes": string[] },',
+      '  "executionMode": "manual" | "auto",',
+      '  "agent": { "enabled": true, "schedule": { "cron": "0 9 * * *", "timezone": "UTC" } },   // OPTIONAL — only for autonomous/scheduled agents',
+      '"nodes": [',
+      '    { "id": string, "type": <a node type>, "title": string, "description": string,',
+      '      "reason": string, "configuration": object,',
+      '      "positionHint": { "column": number, "row": number },',
+      '      "required": boolean }',
+      '  ],',
+      '  "edges": [ { "source": <node id>, "target": <node id>, "reason": string } ],',
+      '  "reasoning": string,',
+      '  "warnings": string[],',
+      '  "metadata": {}',
+      '}',
+      '',
+      'VALID EXAMPLE (recipe assistant):',
+      '{',
+      '  "name": "Fridge Recipe Helper",',
+      '  "description": "Turns pantry ingredients into meal ideas",',
+      '  "goal": "Suggest recipes from available ingredients",',
+      '  "providerRecommendation": "fireworks",',
+      '  "modelRecommendation": "accounts/fireworks/models/deepseek-v4-flash",',
+      '  "memoryRecommendation": { "enabled": false, "kind": "working", "scope": "brain" },',
+      '  "knowledgeRecommendation": { "required": false, "sourceTypes": ["documents"] },',
+      '  "executionMode": "auto",',
+      '  "nodes": [',
+      '    { "id": "fridge-input", "type": "filesystem", "title": "Fridge Ingredients", "description": "List what is in the fridge", "reason": "Start here", "configuration": {}, "positionHint": { "column": 0, "row": 0 }, "required": true },',
+      '    { "id": "recipe-llm", "type": "llm", "title": "Recipe Generator", "description": "Suggests meals from ingredients", "reason": "Core reasoning", "configuration": {}, "positionHint": { "column": 1, "row": 0 }, "required": true },',
+      '    { "id": "recipe-output", "type": "output", "title": "Meal Plan", "description": "Returns the suggestions", "reason": "Deliver result", "configuration": {}, "positionHint": { "column": 2, "row": 0 }, "required": true }',
+      '  ],',
+      '  "edges": [',
+      '    { "source": "fridge-input", "target": "recipe-llm", "reason": "Feed ingredients to the generator" },',
+      '    { "source": "recipe-llm", "target": "recipe-output", "reason": "Send recipes to the output" }',
+      '  ],',
+      '  "reasoning": "A simple linear pipeline",',
+      '  "warnings": [],',
+      '  "metadata": {}',
+      '}',
+      '',
+      'Follow the STRICT GRAPH RULES exactly. The graph MUST have 3-5 nodes including an "output" node and an "llm" node.',
+    ].join('\n')
+  }
+}

@@ -1,0 +1,99 @@
+{
+  "format": "openbrain/brain",
+  "version": 1,
+  "id": "db9b33c8-8780-4640-9c92-77978cf5b071",
+  "name": "Create a market research agent…",
+  "description": "",
+  "goal": "",
+  "provider": {
+    "providerId": "fireworks",
+    "model": ""
+  },
+  "memory": {
+    "enabled": false,
+    "kind": "working",
+    "scope": "brain"
+  },
+  "knowledge": {
+    "required": false,
+    "sourceTypes": []
+  },
+  "execution": {
+    "mode": "auto"
+  },
+  "agent": {
+    "enabled": true,
+    "schedule": {
+      "cron": "0 9 * * *",
+      "timezone": "UTC"
+    }
+  },
+  "graph": {
+    "nodes": [
+      {
+        "id": "url-builder",
+        "type": "llm",
+        "x": 0,
+        "y": 0,
+        "reason": "Converts the user's company name into a searchable URL for the browser node",
+        "configuration": {
+          "instructions": "You are a URL builder. Given a company name (provided in the context), output a Google search URL that searches for that company's marketing strategy. Output only the URL, no other text. Example: if the company is 'Tesla', output 'https://www.google.com/search?q=Tesla+marketing+strategy'."
+        }
+      },
+      {
+        "id": "web-research",
+        "type": "browser",
+        "x": 260,
+        "y": 0,
+        "reason": "Retrieves live web content about the company's marketing to provide raw material for analysis",
+        "configuration": {}
+      },
+      {
+        "id": "analysis-llm",
+        "type": "llm",
+        "x": 520,
+        "y": 0,
+        "reason": "Core reasoning node that interprets the fetched content and generates the final report",
+        "configuration": {
+          "instructions": "You are a market research analyst. Analyze the provided web content about the company's marketing strategy. Provide a clear breakdown covering: positioning, target audience, messaging, channels, and competitive differentiation. Output in markdown format with headings and bullet points."
+        }
+      },
+      {
+        "id": "final-output",
+        "type": "output",
+        "x": 780,
+        "y": 0,
+        "reason": "Sink node that presents the analysis as the final output",
+        "configuration": {}
+      }
+    ],
+    "connections": [
+      {
+        "id": "21018847-5d4d-431d-ad86-6e57d172e8c3",
+        "from": "url-builder",
+        "fromPort": "response",
+        "to": "web-research",
+        "toPort": "url"
+      },
+      {
+        "id": "8fd28ced-6aab-4697-a99f-d988f899c08a",
+        "from": "web-research",
+        "fromPort": "pages",
+        "to": "analysis-llm",
+        "toPort": "context"
+      },
+      {
+        "id": "492d24ed-5be4-4a29-9448-39a0afe5e6ad",
+        "from": "analysis-llm",
+        "fromPort": "response",
+        "to": "final-output",
+        "toPort": "result"
+      }
+    ]
+  },
+  "dependencies": [],
+  "metadata": {
+    "exportedAt": "2026-08-03T16:27:38.926Z",
+    "appVersion": "desktop"
+  }
+}

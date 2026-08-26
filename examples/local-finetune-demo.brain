@@ -1,0 +1,48 @@
+{
+  "format": "openbrain/brain",
+  "version": 1,
+  "id": "local-finetune-demo",
+  "name": "Local Fine-tune Demo",
+  "description": "Probes the machine it runs on (GPU/VRAM/libs), picks a base model that fits, and fine-tunes a LoRA adapter for the goal. Run with the TUI in --local mode so the trainer can use your GPU + Python.",
+  "goal": "Fine-tune a small local model to summarize city council minutes in plain language.",
+  "provider": {
+    "providerId": "fireworks",
+    "model": ""
+  },
+  "memory": { "enabled": false, "kind": "working", "scope": "brain" },
+  "knowledge": { "required": false, "sourceTypes": [] },
+  "execution": { "mode": "manual" },
+  "graph": {
+    "nodes": [
+      {
+        "id": "finetune",
+        "type": "finetune",
+        "x": 120,
+        "y": 120,
+        "status": "idle",
+        "configuration": {
+          "goal": "summarize city council minutes in plain language",
+          "baseModel": "",
+          "dataset": "",
+          "method": "lora",
+          "trainingType": "sft",
+          "hyperparameters": { "epochs": 1, "learningRate": 1e-4, "rank": 4, "batchSize": 2 },
+          "maxSteps": 4
+        }
+      },
+      {
+        "id": "output",
+        "type": "output",
+        "x": 420,
+        "y": 120,
+        "status": "idle",
+        "configuration": {}
+      }
+    ],
+    "connections": [
+      { "id": "ft-to-out", "from": "finetune", "fromPort": "model", "to": "output", "toPort": "result" }
+    ]
+  },
+  "dependencies": [],
+  "metadata": { "exportedAt": "2026-08-03T00:00:00.000Z", "appVersion": "desktop" }
+}

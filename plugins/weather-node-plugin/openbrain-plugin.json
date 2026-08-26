@@ -1,0 +1,18 @@
+{
+  "name": "openbrain-weather-node",
+  "version": "0.1.0",
+  "kind": "node",
+  "description": "Example plugin: a Weather node that fetches conditions from wttr.in (no API key). Demonstrates the plugin manifest + runtime hooks contract.",
+  "main": "index.js",
+  "nodeTypes": [
+    {
+      "type": "weather",
+      "label": "Weather",
+      "description": "Fetch current conditions for a city (wttr.in, no key)",
+      "inputs": [{ "id": "city", "label": "City", "kind": "text" }],
+      "outputs": [{ "id": "content", "label": "Conditions", "kind": "text" }]
+    }
+  ],
+  "author": "OpenBrain",
+  "license": "MIT"
+}
