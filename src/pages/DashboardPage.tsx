@@ -395,7 +395,7 @@ export default function DashboardPage() {
       <main className="flex-1 h-full flex flex-col min-w-0 relative z-10">
         <header className="h-16 shrink-0 flex items-center justify-between px-6 border-b border-[rgba(255,255,255,0.06)]">
           <div className="flex items-center gap-1">
-            {['lucide:book-open', 'mdi:github', 'simple-icons:x', 'lucide:gift'].map((icon) => (
+            {['lucide:book-open', 'mdi:github'].map((icon) => (
               <button
                 key={icon}
                 className="w-9 h-9 flex items-center justify-center rounded-lg text-white/40 hover:text-white hover:bg-white/5 transition-all"
