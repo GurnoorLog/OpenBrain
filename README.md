@@ -1,40 +1,40 @@
 # OpenBrain
 
-Still beta. I'm building this as I go. Things will break, and I'm sorry about that.
-Here's a video showing what it actually does right now:
+Still beta. I am working on it as I write this. So if u encounter a bug pls forgive me 😭
+Here's a video of what it does at the present moment:
 [Watch the demo](https://youtu.be/tX9TiHpuJhE?si=FQzuDhMjM4sVOkWC)
 
-You draw AI agents and they just work.
+So basically u free an AI agent
 
-That's the whole idea. You drag nodes around a canvas, wire them up, and you've got an agent. Or you type a sentence and an AI builds the whole graph for you. Everything runs on your machine.
+That's the whole idea. You drag nodes around a canvas, wire them up, and you have an agent. Or you type a sentence and an AI constructs the entire graph for you. Everything runs on your own machine.
 
 ---
 
 ## What is this
 
-Think Unreal Engine Blueprints, but for AI. Each node on the canvas does something real. Calls an LLM. Grabs a webpage. Reads a file. Runs code. Connect them and you have an agent.
+Think of it as a text-based approach to AI with the power of Unreal Engine, but for AI instead of games. Every node on the canvas does something real. Calls an LLM. Grabs a webpage. Reads a file. Runs code. Connect them and you have an agent.
 
-Or just tell the AI what you want:
+Or simply tell the AI what you want:
 
-> "Create a market research agent that analyzes a company's marketing and suggests improvements"
+> Create a market research agent to evaluate a company's marketing and recommend changes.
 
-It builds the graph for you. You watch it happen.
+It generates the graph for you. You see it happen.
 
 ---
 
 ## What's here
 
-**Canvas.** Drag nodes, connect them, watch it come together. Like LEGOs that actually do stuff.
+**Canvas.** Drag nodes, connect them, watch them come together. Like LEGOs that do things.
 
-**AI Architect.** Say what you want. It figures out the nodes and why each one matters.
+**AI Architect.** Tell it what you want. It figures out the nodes and why each one matters.
 
 **Works everywhere.** Browser, terminal, REST API, scheduled jobs. Same `.brain` file in all of them.
 
-**Fine-tune on your GPU.** The trainer looks at your hardware and picks a model that fits. Doesn't matter if you've got a 4GB laptop or an A100.
+**Fine-tune on your GPU.** The trainer inspects your hardware and picks a model that fits. Doesn't matter if you have a 4GB laptop or an A100.
 
 **Actually functional tools.** LLM calls, web scraping, file I/O, GitHub, MCP, RAG, Python, image gen. Not placeholders.
 
-**`.brain` files.** Export your agent as one file. Pass it around, version control it, run it somewhere else.
+**`.brain` files.** Export your agent as one file. Share it, version control it, run it somewhere else.
 
 ---
 
@@ -51,14 +51,14 @@ bash setup.sh
 .\setup.ps1
 ```
 
-The script handles Docker, Ollama, downloading models. All of it. It can also walk you through making your first brain.
+The script handles Docker, Ollama, downloading models. All of it. It can also walk you through creating your first brain.
 
 ---
 
 ## How to use it
 
 1. Describe what you want in the chat. The Architect builds a brain from it.
-2. Hit "Activate Agent" and talk to your brain.
+2. Press "Activate Agent" and talk to your brain.
 3. Export as a `.brain` file when you're happy with it.
 
 ### Terminal
@@ -71,7 +71,7 @@ node tui/dist/cli.js your-brain.brain --once "Analyze Nike's marketing"
 
 ### Fine-tuning
 
-Type something like "Fine-tune an LLM to summarize city council minutes" in the app. Pick "Train on this machine." It does the rest.
+Type something like "Summarize city council minutes" in the app. Pick "Train on this machine." It does the rest.
 
 Or from terminal:
 ```bash
