@@ -23,8 +23,8 @@ echo ""
 echo -e "  ------------------------------------------"
 echo ""
 
-# --- Check Docker ---
-echo -ne "  ${D}[1/4]${N} Checking Docker...            "
+# --- Check Docker installed ---
+echo -ne "  ${D}[1/5]${N} Checking Docker installed...   "
 if ! command -v docker &> /dev/null; then
   echo -e "${R}X${N}"
   echo -e "  ${R}Docker is not installed.${N}"
@@ -33,9 +33,38 @@ if ! command -v docker &> /dev/null; then
 fi
 echo -e "${G}OK${N}"
 
+# --- Check Docker daemon running ---
+echo -ne "  ${D}[2/5]${N} Checking Docker running...     "
+DOCKER_OK=false
+for attempt in 1 2 3 4 5 6; do
+  if docker ps > /dev/null 2>&1; then
+    DOCKER_OK=true
+    break
+  fi
+  if [ "$attempt" -eq 1 ]; then
+    echo ""
+    echo -e "  ${Y}Docker Desktop is not running. Starting it...${N}"
+    if command -v open &> /dev/null; then
+      open -a Docker 2>/dev/null || true
+    elif [ -f "/usr/bin/docker-desktop" ]; then
+      /usr/bin/docker-desktop &>/dev/null &
+    fi
+  fi
+  echo -ne "  ${D}[2/5]${N} Waiting for Docker daemon...   "
+  sleep 5
+  echo -ne "\r  ${D}[2/5]${N} Waiting for Docker daemon...   "
+done
+if [ "$DOCKER_OK" = false ]; then
+  echo -e "${R}X${N}"
+  echo -e "  ${R}Docker Desktop could not start.${N}"
+  echo -e "  Open Docker Desktop manually and run this script again."
+  exit 1
+fi
+echo -e "${G}OK${N}"
+
 # --- Check Docker Compose ---
-echo -ne "  ${D}[2/4]${N} Checking Docker Compose...     "
-if ! docker compose version &> /dev/null 2>&1; then
+echo -ne "  ${D}[3/5]${N} Checking Docker Compose...     "
+if ! docker compose version > /dev/null 2>&1; then
   echo -e "${R}X${N}"
   echo -e "  ${R}Update Docker Desktop to the latest version.${N}"
   exit 1
@@ -43,10 +72,16 @@ fi
 echo -e "${G}OK${N}"
 
 # --- Create .env ---
-echo -ne "  ${D}[3/4]${N} Preparing config...           "
+echo -ne "  ${D}[4/5]${N} Preparing config...            "
 if [ ! -f .env ]; then
-  cp .env.example .env
-  echo -e "${G}OK${N}  (.env created)"
+  if [ -f .env.example ]; then
+    cp .env.example .env
+    echo -e "${G}OK${N}  (.env created)"
+  else
+    echo -e "${R}X${N}"
+    echo -e "  ${R}No .env.example found. Clone the repo first.${N}"
+    exit 1
+  fi
 else
   echo -e "${G}OK${N}  (.env exists)"
 fi
@@ -67,13 +102,35 @@ read -rp "  Pick 1 or 2 > " LLM_CHOICE
 
 if [ "$LLM_CHOICE" != "2" ]; then
 
-  # --- Check HOST Ollama first ---
+  # --- Check Ollama installed ---
   echo ""
-  echo -e "  ${W}Checking Ollama on your machine...${N}"
+  echo -ne "  ${D}[5/5]${N} Checking Ollama installed...   "
+  if ! command -v ollama &> /dev/null; then
+    echo -e "${R}X${N}"
+    echo -e "  ${R}Ollama is not installed.${N}"
+    echo -e "  Install from: ${C}https://ollama.com/download${N}"
+    echo -e "  Then run this script again."
+    exit 1
+  fi
+  echo -e "${G}OK${N}"
 
+  # --- Check Ollama running ---
+  echo -ne "  Checking Ollama daemon...            "
   HOST_OLLAMA_OK=false
   if curl -s http://127.0.0.1:11434/api/tags > /dev/null 2>&1; then
     HOST_OLLAMA_OK=true
+  fi
+
+  if [ "$HOST_OLLAMA_OK" = false ]; then
+    echo -e "${Y}not running${N}"
+    echo -e "  ${Y}Starting Ollama...${N}"
+    if command -v ollama &> /dev/null; then
+      ollama serve > /dev/null 2>&1 &
+      sleep 5
+    fi
+    if curl -s http://127.0.0.1:11434/api/tags > /dev/null 2>&1; then
+      HOST_OLLAMA_OK=true
+    fi
   fi
 
   if [ "$HOST_OLLAMA_OK" = true ]; then
@@ -137,7 +194,7 @@ if [ "$LLM_CHOICE" != "2" ]; then
     echo -e "  ${W}Starting OpenBrain with built-in Ollama...${N}"
     echo ""
 
-    echo -ne "  ${D}[4/4]${N} Starting OpenBrain stack...    "
+    echo -ne "  Starting Docker stack...              "
     docker compose up -d 2>&1 | tail -1 | tr -d '\n'
     echo -e " ${G}OK${N}"
 
@@ -172,7 +229,7 @@ if [ "$LLM_CHOICE" != "2" ]; then
   else
     # Start stack
     echo ""
-    echo -ne "  ${D}[4/4]${N} Starting OpenBrain stack...    "
+    echo -ne "  Starting Docker stack...              "
     docker compose up -d 2>&1 | tail -1 | tr -d '\n'
     echo -e " ${G}OK${N}"
   fi
@@ -205,7 +262,7 @@ else
   fi
 
   echo ""
-  echo -ne "  ${D}[4/4]${N} Starting OpenBrain stack...    "
+  echo -ne "  Starting Docker stack...              "
   docker compose up -d 2>&1 | tail -1 | tr -d '\n'
   echo -e " ${G}OK${N}"
 
@@ -214,10 +271,8 @@ fi
 echo ""
 echo -e "  ${G}------------------------------------------${N}"
 echo ""
-echo -e "  ${G}  OpenBrain is ready!${N}"
-echo -e "  ${C}  http://127.0.0.1:8080${N}"
-echo ""
 
+# --- Wait for server to be ready ---
 echo -e "  ${D}Waiting for server to start...${N}"
 SERVER_READY=0
 for i in $(seq 1 30); do
@@ -227,9 +282,14 @@ for i in $(seq 1 30); do
   fi
   sleep 2
 done
-if [ "$SERVER_READY" -ne 1 ]; then
-  echo -e "  ${Y}Server still starting. Try http://127.0.0.1:8080 in a few seconds.${N}"
+
+if [ "$SERVER_READY" -eq 1 ]; then
+  echo -e "  ${G}OpenBrain is ready!${N}"
+else
+  echo -e "  ${Y}Server is still starting up. Give it 10-20 seconds.${N}"
 fi
+echo -e "  ${C}http://127.0.0.1:8080${N}"
+echo ""
 
 # =====================================================
 #  GUIDED WALKTHROUGH
@@ -333,12 +393,6 @@ if [ "$WALK_CHOICE" = "1" ]; then
   echo -e "    ${W}Run in TUI:     node tui/dist/cli.js <file>.brain${N}"
   echo -e "    ${W}Stop:           docker compose down${N}"
   echo -e "    ${W}Restart:        docker compose up -d${N}"
-  echo ""
-  echo -e "  ${Y}------------------------------------------${N}"
-  echo ""
-  echo -e "  ${W}Also check out:${N}"
-  echo -e "    ${C}Landing page:  https://openbrain.dev${N}"
-  echo -e "    ${C}Sign in:       https://openbrain.dev/auth${N}"
   echo ""
   echo -e "  ${Y}------------------------------------------${N}"
   echo ""

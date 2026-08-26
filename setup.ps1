@@ -14,8 +14,8 @@ Write-Host ""
 Write-Host "  ------------------------------------------"
 Write-Host ""
 
-# --- Check Docker ---
-Write-Host -NoNewline "  [1/4] Checking Docker...            "
+# --- Check Docker installed ---
+Write-Host -NoNewline "  [1/5] Checking Docker installed...   "
 if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
     Write-Host "X" -ForegroundColor Red
     Write-Host "  Docker is not installed." -ForegroundColor Red
@@ -24,8 +24,36 @@ if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
 }
 Write-Host "OK" -ForegroundColor Green
 
+# --- Check Docker daemon running ---
+Write-Host -NoNewline "  [2/5] Checking Docker running...     "
+$dockerRunning = $false
+for ($attempt = 0; $attempt -lt 3; $attempt++) {
+    try {
+        $null = docker ps 2>&1
+        if ($LASTEXITCODE -eq 0) {
+            $dockerRunning = $true
+            break
+        }
+    } catch {}
+    if ($attempt -eq 0) {
+        Write-Host ""
+        Write-Host "  Docker Desktop is not running. Starting it..." -ForegroundColor Yellow
+        Start-Process "C:\Program Files\Docker\Docker\Docker Desktop.exe" -ErrorAction SilentlyContinue
+    }
+    Write-Host -NoNewline "  [2/5] Waiting for Docker daemon...   "
+    Start-Sleep -Seconds 5
+    Write-Host -NoNewline "`r  [2/5] Waiting for Docker daemon...   "
+}
+if (-not $dockerRunning) {
+    Write-Host "X" -ForegroundColor Red
+    Write-Host "  Docker Desktop could not start." -ForegroundColor Red
+    Write-Host "  Open Docker Desktop manually and run this script again." -ForegroundColor Cyan
+    exit 1
+}
+Write-Host "OK" -ForegroundColor Green
+
 # --- Check Docker Compose ---
-Write-Host -NoNewline "  [2/4] Checking Docker Compose...     "
+Write-Host -NoNewline "  [3/5] Checking Docker Compose...     "
 try { docker compose version | Out-Null } catch {
     Write-Host "X" -ForegroundColor Red
     Write-Host "  Update Docker Desktop to the latest version." -ForegroundColor Red
@@ -34,11 +62,17 @@ try { docker compose version | Out-Null } catch {
 Write-Host "OK" -ForegroundColor Green
 
 # --- Create .env ---
-Write-Host -NoNewline "  [3/4] Preparing config...           "
+Write-Host -NoNewline "  [4/5] Preparing config...            "
 if (-not (Test-Path .env)) {
-    Copy-Item .env.example .env
-    Write-Host "OK" -ForegroundColor Green -NoNewline
-    Write-Host "  (.env created)"
+    if (Test-Path .env.example) {
+        Copy-Item .env.example .env
+        Write-Host "OK" -ForegroundColor Green -NoNewline
+        Write-Host "  (.env created)"
+    } else {
+        Write-Host "X" -ForegroundColor Red
+        Write-Host "  No .env.example found. Clone the repo first." -ForegroundColor Red
+        exit 1
+    }
 } else {
     Write-Host "OK" -ForegroundColor Green -NoNewline
     Write-Host "  (.env exists)"
@@ -62,15 +96,44 @@ $useOllama = ($llmChoice -ne "2")
 
 if ($useOllama) {
 
-    # --- Check HOST Ollama first ---
+    # --- Check Ollama installed ---
     Write-Host ""
-    Write-Host "  Checking Ollama on your machine..." -ForegroundColor White
+    Write-Host -NoNewline "  [5/5] Checking Ollama installed...   "
+    $ollamaInstalled = $false
+    try {
+        $null = Get-Command ollama -ErrorAction Stop
+        $ollamaInstalled = $true
+    } catch {}
 
+    if (-not $ollamaInstalled) {
+        Write-Host "X" -ForegroundColor Red
+        Write-Host "  Ollama is not installed." -ForegroundColor Red
+        Write-Host "  Install from: https://ollama.com/download" -ForegroundColor Cyan
+        Write-Host "  Then run this script again." -ForegroundColor Cyan
+        exit 1
+    }
+    Write-Host "OK" -ForegroundColor Green
+
+    # --- Check Ollama running ---
+    Write-Host -NoNewline "  Checking Ollama daemon...            "
     $hostOllamaOk = $false
     try {
         $hostModels = Invoke-RestMethod -Uri "http://127.0.0.1:11434/api/tags" -TimeoutSec 3 -ErrorAction Stop
         $hostOllamaOk = $true
     } catch {}
+
+    if (-not $hostOllamaOk) {
+        Write-Host "X" -ForegroundColor Yellow
+        Write-Host "  Ollama is installed but not running. Starting it..." -ForegroundColor Yellow
+        Start-Process "ollama" -ArgumentList "serve" -WindowStyle Hidden -ErrorAction SilentlyContinue
+        Start-Sleep -Seconds 5
+
+        # Retry check
+        try {
+            $hostModels = Invoke-RestMethod -Uri "http://127.0.0.1:11434/api/tags" -TimeoutSec 5 -ErrorAction Stop
+            $hostOllamaOk = $true
+        } catch {}
+    }
 
     if ($hostOllamaOk) {
         Write-Host "  Ollama is running on your machine!" -ForegroundColor Green
@@ -137,7 +200,7 @@ if ($useOllama) {
         Write-Host "  Starting OpenBrain with built-in Ollama..." -ForegroundColor White
         Write-Host ""
 
-        Write-Host -NoNewline "  [4/4] Starting OpenBrain stack...    "
+        Write-Host -NoNewline "  Starting Docker stack...              "
         $ErrorActionPreference = "Continue"
         docker compose up -d 2>&1 | Out-Null
         $ErrorActionPreference = "Stop"
@@ -174,7 +237,7 @@ if ($useOllama) {
     } else {
         # Start stack (Ollama is on host, no need to start container Ollama)
         Write-Host ""
-        Write-Host -NoNewline "  [4/4] Starting OpenBrain stack...    "
+        Write-Host -NoNewline "  Starting Docker stack...              "
         $ErrorActionPreference = "Continue"
         docker compose up -d 2>&1 | Out-Null
         $ErrorActionPreference = "Stop"
@@ -206,7 +269,7 @@ if ($useOllama) {
 
     # --- Start stack ---
     Write-Host ""
-    Write-Host -NoNewline "  [4/4] Starting OpenBrain stack...    "
+    Write-Host -NoNewline "  Starting Docker stack...              "
     $ErrorActionPreference = "Continue"
     docker compose up -d 2>&1 | Out-Null
     $ErrorActionPreference = "Stop"
@@ -217,10 +280,8 @@ if ($useOllama) {
 Write-Host ""
 Write-Host "  ------------------------------------------" -ForegroundColor Green
 Write-Host ""
-Write-Host "  OpenBrain is ready!" -ForegroundColor Green
-Write-Host "  http://127.0.0.1:8080" -ForegroundColor Cyan
-Write-Host ""
 
+# --- Wait for server to be ready ---
 Write-Host "  Waiting for server to start..." -ForegroundColor DarkGray
 $serverReady = $false
 for ($i = 0; $i -lt 30; $i++) {
@@ -232,9 +293,14 @@ for ($i = 0; $i -lt 30; $i++) {
         Start-Sleep -Seconds 2
     }
 }
-if (-not $serverReady) {
-    Write-Host "  Server still starting. Try http://127.0.0.1:8080 in a few seconds." -ForegroundColor Yellow
+
+if ($serverReady) {
+    Write-Host "  OpenBrain is ready!" -ForegroundColor Green
+} else {
+    Write-Host "  Server is still starting up. Give it 10-20 seconds." -ForegroundColor Yellow
 }
+Write-Host "  http://127.0.0.1:8080" -ForegroundColor Cyan
+Write-Host ""
 
 # =====================================================
 #  GUIDED WALKTHROUGH
@@ -286,66 +352,47 @@ if ($walkChoice -eq "1") {
     $brainFile = Read-Host "  Filename"
     if (-not $brainFile) {
         $brainFile = (Get-ChildItem "$HOME\Downloads\*.brain" | Sort-Object LastWriteTime -Descending | Select-Object -First 1).Name
-    }
-    $brainPath = "$HOME\Downloads\$brainFile"
-    if (-not (Test-Path $brainPath)) {
-        Write-Host ""
-        Write-Host "  File not found at: $brainPath" -ForegroundColor Red
-        Write-Host "  Check your Downloads folder and type the full path." -ForegroundColor DarkGray
-        $brainPath = Read-Host "  Full path to .brain file"
+        if (-not $brainFile) {
+            $brainFile = "my-agent.brain"
+        }
     }
 
     Write-Host ""
-    Write-Host "  Found: $brainPath" -ForegroundColor Green
-
+    Write-Host "  ------------------------------------------" -ForegroundColor Cyan
+    Write-Host "  STEP 2 / 4 : FINE-TUNE ON YOUR GPU" -ForegroundColor Cyan
+    Write-Host "  ------------------------------------------" -ForegroundColor Cyan
     Write-Host ""
-    Write-Host "  Now open a NEW terminal window and run:" -ForegroundColor Yellow
+    Write-Host "  Back in the chat, type:" -ForegroundColor White
     Write-Host ""
-    Write-Host "    cd $PWD" -ForegroundColor White
-    Write-Host "    node tui\dist\cli.js `"$brainPath`"" -ForegroundColor White
+    Write-Host "  > Fine-tune an LLM to summarize meeting notes" -ForegroundColor White
     Write-Host ""
-    Write-Host "  Or try it with a question:" -ForegroundColor DarkGray
+    Write-Host "  Pick 'Train on this machine' when prompted." -ForegroundColor DarkGray
+    Write-Host "  It runs on your GPU and saves the adapter." -ForegroundColor DarkGray
     Write-Host ""
-    Write-Host "    node tui\dist\cli.js `"$brainPath`" --once `"Analyze Nike marketing`"" -ForegroundColor White
-    Write-Host ""
-
-    Write-Host "  Building the terminal interface..." -ForegroundColor White
-    Push-Location tui
-    npm install 2>&1 | Out-Null
-    $prevEAP = $ErrorActionPreference
-    $ErrorActionPreference = "Continue"
-    npm run build 2>&1 | Out-Null
-    $ErrorActionPreference = $prevEAP
-    Pop-Location
-    Write-Host "  TUI built!" -ForegroundColor Green
-    Write-Host ""
-    Read-Host "  Press Enter when you have tried the TUI"
+    Read-Host "  Press Enter when fine-tuning is done"
 
     Write-Host ""
     Write-Host "  ------------------------------------------" -ForegroundColor Cyan
-    Write-Host "  STEP 2 / 4 : WHAT YOU LEARNED" -ForegroundColor Cyan
+    Write-Host "  STEP 3 / 4 : RUN IN TERMINAL" -ForegroundColor Cyan
     Write-Host "  ------------------------------------------" -ForegroundColor Cyan
     Write-Host ""
-    Write-Host "  You now know how to:" -ForegroundColor White
-    Write-Host "    1. Create a brain with the AI Architect" -ForegroundColor White
-    Write-Host "    2. Export it as a .brain file" -ForegroundColor White
-    Write-Host "    3. Run it with: node tui\dist\cli.js <file>.brain" -ForegroundColor White
+    Write-Host "  Open a new terminal and run:" -ForegroundColor White
     Write-Host ""
-    Write-Host "  ------------------------------------------" -ForegroundColor Green
+    Write-Host "  cd tui && npm install && npm run build && cd .." -ForegroundColor Yellow
+    Write-Host "  node tui/dist/cli.js $brainFile" -ForegroundColor Yellow
     Write-Host ""
-    Write-Host "  You are all set!" -ForegroundColor Green
+    Write-Host "  Your brain talks back to you in the terminal." -ForegroundColor DarkGray
     Write-Host ""
-    Write-Host "  Quick reference:" -ForegroundColor White
-    Write-Host "    Create brains:  http://127.0.0.1:8080" -ForegroundColor Cyan
-    Write-Host "    Run in TUI:     node tui\dist\cli.js <file>.brain" -ForegroundColor White
-    Write-Host "    Stop:           docker compose down" -ForegroundColor White
-    Write-Host "    Restart:        docker compose up -d" -ForegroundColor White
+    Read-Host "  Press Enter when you've tried it"
+
     Write-Host ""
-    Write-Host "  ------------------------------------------" -ForegroundColor Magenta
+    Write-Host "  ------------------------------------------" -ForegroundColor Cyan
+    Write-Host "  STEP 4 / 4 : EXPORT AND SHARE" -ForegroundColor Cyan
+    Write-Host "  ------------------------------------------" -ForegroundColor Cyan
     Write-Host ""
-    Write-Host "  Also check out:" -ForegroundColor White
-    Write-Host "    Landing page:  https://openbrain.dev" -ForegroundColor Cyan
-    Write-Host "    Sign in:       https://openbrain.dev/auth" -ForegroundColor Cyan
+    Write-Host "  Your .brain file IS the export." -ForegroundColor White
+    Write-Host "  Email it, git commit it, put it on a USB stick." -ForegroundColor DarkGray
+    Write-Host "  Anyone can run it with this same setup script." -ForegroundColor DarkGray
     Write-Host ""
     Write-Host "  ------------------------------------------" -ForegroundColor Magenta
     Write-Host ""
@@ -364,9 +411,8 @@ if ($walkChoice -eq "1") {
     Write-Host ""
     Write-Host "  Quick reference:" -ForegroundColor DarkGray
     Write-Host "    Create brains:  http://127.0.0.1:8080" -ForegroundColor DarkGray
-    Write-Host "    Run in TUI:     node tui\dist\cli.js <file>.brain" -ForegroundColor DarkGray
-    Write-Host "    Stop:           docker compose down" -ForegroundColor DarkGray
-    Write-Host "    Restart:        docker compose up -d" -ForegroundColor DarkGray
+    Write-Host "    Terminal:       node tui/dist/cli.js <file>.brain" -ForegroundColor DarkGray
+    Write-Host "    API:            http://127.0.0.1:8080/run" -ForegroundColor DarkGray
     Write-Host ""
 
 }
