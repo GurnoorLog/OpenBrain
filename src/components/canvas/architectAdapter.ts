@@ -33,6 +33,28 @@ function getOllamaBaseUrl(): string {
   const base = runtimeUrl || window.location.origin
   return `${base.replace(/\/+$/, '')}/ollama`
 }
+
+export async function fetchOllamaModels(): Promise<string[]> {
+  try {
+    const base = getOllamaBaseUrl()
+    const res = await fetch(`${base}/api/tags`, { signal: AbortSignal.timeout(5000) })
+    if (!res.ok) return []
+    const data = await res.json()
+    return (data.models ?? []).map((m: { name: string }) => m.name)
+  } catch {
+    return []
+  }
+}
+
+const OLLAMA_MODEL_KEY = 'openbrain:selectedOllamaModel'
+
+export function getSelectedOllamaModel(): string | null {
+  try { return localStorage.getItem(OLLAMA_MODEL_KEY) } catch { return null }
+}
+
+export function setSelectedOllamaModel(model: string): void {
+  try { localStorage.setItem(OLLAMA_MODEL_KEY, model) } catch { /* ignore */ }
+}
 const providers: Readonly<Record<ProviderId, ArchitectProvider>> = {
   fireworks: new FireworksArchitect(promptBuilder, validator),
   ollama: new OllamaArchitect(promptBuilder, validator, { baseUrl: getOllamaBaseUrl(), timeoutMs: 120_000 }),

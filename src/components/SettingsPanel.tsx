@@ -161,8 +161,11 @@ export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
         </div>
 
         <div className="mb-4">
-          <div className="text-[10px] uppercase tracking-widest text-gray-500 font-bold mb-1.5">
+          <div className="text-[10px] uppercase tracking-widest text-gray-500 font-bold mb-1.5 flex items-center gap-2">
             Agent schedule
+            <span className="px-1.5 py-0.5 bg-amber-500/15 text-amber-400 text-[9px] font-bold uppercase rounded border border-amber-500/20">
+              Soon
+            </span>
           </div>
           <div className="rounded-lg bg-white/5 border border-white/10 p-3 flex flex-col gap-2.5">
             <label className="flex items-center justify-between cursor-pointer">

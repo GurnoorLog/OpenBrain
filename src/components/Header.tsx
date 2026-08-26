@@ -184,9 +184,12 @@ export default function Header() {
           className={`toolbar-btn hover:text-sky-400 ${running ? 'opacity-40 pointer-events-none' : ''}`}
           onClick={() => void runBrainInCloud()}
           aria-label="Run brain in the cloud (Render)"
-          title="Run brain in the cloud (Render)"
+          title="Run brain in the cloud (Coming Soon)"
         >
           <iconify-icon icon="lucide:cloud-cog" className="text-xl"></iconify-icon>
+          <span className="absolute -bottom-4 left-1/2 -translate-x-1/2 px-1 py-0.5 bg-amber-500/15 text-amber-400 text-[8px] font-bold uppercase rounded border border-amber-500/20 whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity">
+            Soon
+          </span>
         </button>
         <button
           id="nav-test-btn"
@@ -220,11 +223,15 @@ export default function Header() {
         </button>
         <button
           id="nav-share-btn"
-          className="nav-btn text-gray-300"
+          className="nav-btn text-gray-300 relative"
           onClick={() => void shareBrain()}
+          title="Share (Coming Soon)"
         >
           <iconify-icon icon="lucide:share-2" className="text-lg"></iconify-icon>
           Share
+          <span className="absolute -top-1 -right-1 px-1 py-0.5 bg-amber-500/15 text-amber-400 text-[7px] font-bold uppercase rounded border border-amber-500/20">
+            Soon
+          </span>
         </button>
         <div className="avatar-ring ml-2">
           <div className="w-9 h-9 rounded-full bg-teal-600 flex items-center justify-center text-white font-bold text-sm border-2 border-[#0c0c0c] shadow-lg cursor-pointer hover:scale-105 transition-transform">

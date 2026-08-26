@@ -7,6 +7,16 @@ import { screenToFlowPosition } from './canvas/flowInstance'
 // Premium node palette popup. Opens from the grid toolbar button. Every node
 // type is shown as a card in a grid; drag a card anywhere on the overlay to
 // place it exactly, or click a card to drop it at the viewport center.
+
+const COMING_SOON: ReadonlySet<string> = new Set([
+  'github',
+  'python',
+  'imagegen',
+  'news',
+  'worker',
+  'tool',
+])
+
 export default function NodePalette() {
   const open = useBrainStore((state) => state.paletteOpen)
   const setPaletteOpen = useBrainStore((state) => state.setPaletteOpen)
@@ -103,6 +113,11 @@ export default function NodePalette() {
                     <span className="block text-sm font-semibold text-white leading-tight">{def.label}</span>
                     <span className="block text-[11px] text-gray-400 leading-snug truncate">{def.description}</span>
                   </span>
+                  {COMING_SOON.has(def.type) && (
+                    <span className="px-1.5 py-0.5 bg-amber-500/15 text-amber-400 text-[9px] font-bold uppercase rounded border border-amber-500/20 shrink-0">
+                      Soon
+                    </span>
+                  )}
                   <span className="text-gray-600 opacity-0 group-hover:opacity-100 transition-opacity">
                     <iconify-icon icon="lucide:plus" className="text-base"></iconify-icon>
                   </span>

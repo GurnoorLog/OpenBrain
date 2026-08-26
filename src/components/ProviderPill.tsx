@@ -3,9 +3,12 @@ import type { ProviderStatus } from '../core/domain'
 import { PROVIDER_CATALOG } from '../core/architect'
 import { FIREWORKS_MODELS } from '../core/providers/fireworksModels'
 import {
+  fetchOllamaModels,
   getSelectedFireworksModel,
+  getSelectedOllamaModel,
   listProviderHealth,
   setSelectedFireworksModel,
+  setSelectedOllamaModel,
 } from './canvas/architectAdapter'
 import type { ProviderOverview } from './canvas/architectAdapter'
 import { useBrainStore } from '../store/useBrainStore'
@@ -22,6 +25,9 @@ function resolveActiveModel(providerId: ProviderId): string {
   const entry = PROVIDER_CATALOG.find((candidate) => candidate.id === providerId)
   if (entry?.id === 'fireworks') {
     return getSelectedFireworksModel() ?? entry.defaultModel ?? ''
+  }
+  if (entry?.id === 'ollama') {
+    return getSelectedOllamaModel() ?? entry.defaultModel ?? ''
   }
   return entry?.defaultModel ?? ''
 }
@@ -44,6 +50,8 @@ export default function ProviderPill() {
   const [open, setOpen] = useState(false)
   const [health, setHealth] = useState<Readonly<Record<string, ProviderOverview>>>({})
   const [selectedModel, setSelectedModel] = useState<string>(() => getSelectedFireworksModel() ?? '')
+  const [ollamaModels, setOllamaModels] = useState<string[]>([])
+  const [selectedOllama, setSelectedOllama] = useState<string>(() => getSelectedOllamaModel() ?? '')
   const ref = useRef<HTMLDivElement>(null)
 
   // The model actually in effect: the user's Settings pick for Fireworks,
@@ -65,11 +73,13 @@ export default function ProviderPill() {
     setOpen(next)
     if (next) {
       setSelectedModel(getSelectedFireworksModel() ?? '')
+      setSelectedOllama(getSelectedOllamaModel() ?? '')
       void listProviderHealth().then((overviews) => {
         const map: Record<string, ProviderOverview> = {}
         for (const overview of overviews) map[overview.id] = overview
         setHealth(map)
       })
+      void fetchOllamaModels().then(setOllamaModels)
     }
   }
 
@@ -161,6 +171,45 @@ export default function ProviderPill() {
                       </span>
                       <span className="block text-[11px] text-gray-500 truncate">
                         {model.description}
+                      </span>
+                    </div>
+                    {isSelected && (
+                      <iconify-icon icon="lucide:check" className="text-teal-400 text-xs"></iconify-icon>
+                    )}
+                  </button>
+                )
+              })}
+            </div>
+          </>
+        )}
+        {activeProviderId === 'ollama' && (
+          <>
+            <div className="px-3 pt-3 pb-1 text-[10px] uppercase tracking-widest text-gray-500 font-bold">
+              Model
+            </div>
+            <div className="flex flex-col gap-0.5">
+              {ollamaModels.length === 0 && (
+                <div className="px-3 py-2 text-[11px] text-gray-500">
+                  No models found. Install Ollama and pull a model.
+                </div>
+              )}
+              {ollamaModels.map((model) => {
+                const isSelected = model === selectedOllama
+                return (
+                  <button
+                    key={model}
+                    className="flex items-center gap-2 px-3 py-2 rounded-lg text-left hover:bg-white/5 transition-colors"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setSelectedOllama(model)
+                      setSelectedOllamaModel(model)
+                      setOpen(false)
+                    }}
+                    aria-pressed={isSelected}
+                  >
+                    <div className="flex-1 min-w-0">
+                      <span className="text-sm text-gray-200 font-medium truncate">
+                        {model}
                       </span>
                     </div>
                     {isSelected && (
