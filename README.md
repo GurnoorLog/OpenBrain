@@ -86,9 +86,9 @@ You need Python 3.10+, a CUDA GPU, and `pip install torch peft transformers bits
 
 | File | What it does |
 | --- | --- |
-| `create-a-market-research-agent-.brain` | Market research agent |
-| `marketing-analyzer.brain` | Marketing analysis |
-| `topic-brief.brain` | Topic briefing |
+| `examples/create-a-market-research-agent-.brain` | Market research agent |
+| `examples/marketing-analyzer.brain` | Marketing analysis |
+| `examples/topic-brief.brain` | Topic briefing |
 | `examples/local-finetune-demo.brain` | Local fine-tuning demo |
 
 ---
