@@ -102,6 +102,7 @@ function ActivityPanel({ steps, width }) {
   const inner = Math.max(10, width - 6)
   const active = steps.filter((step) => step.state === 'running')
   const finished = steps.filter((step) => step.state !== 'running').slice(-3)
+  const details = (step) => wrapLines(step.detail || '', inner).join('\n')
   return (
     <Box flexDirection="column" marginBottom={1}>
       {active.map((step) => {
@@ -111,7 +112,7 @@ function ActivityPanel({ steps, width }) {
             <Text color="magenta"><Spinner type="dots" /> </Text>
             <Text bold>{style.label}</Text>
             {'  '}
-            {step.detail}
+            {details(step)}
           </Text>
         )
       })}
@@ -120,7 +121,7 @@ function ActivityPanel({ steps, width }) {
         const mark = step.state === 'error' ? '✗' : '✓'
         return (
           <Text key={step.key} color={style.color} dim>
-            {mark} {style.label}  {step.detail}
+            {mark} {style.label}  {details(step)}
           </Text>
         )
       })}
@@ -214,14 +215,12 @@ export default function App({ brain: initialBrain, runner }) {
     try {
       const result = await runner.run({
         message: text,
+        brain,
         memory,
         onLog: (entry) => append({ kind: 'log', level: entry.level, text: entry.message }),
         onToken: (token) => setStreamText((prev) => prev + token),
         onEvent: applyEvent,
       })
-      if (runner.backend === 'runtime' && Array.isArray(result.log)) {
-        for (const entry of result.log) append({ kind: 'log', level: entry.level, text: entry.message })
-      }
       const output = extractOutput(result, brain)
       if (output) {
         append({ kind: 'assistant', text: output })

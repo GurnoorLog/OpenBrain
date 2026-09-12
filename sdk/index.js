@@ -135,7 +135,7 @@ function listPlugins(pluginsDir) {
 // ---------------------------------------------------------------------------
 
 function runtimeClient(baseUrl) {
-  const root = String(baseUrl || process.env.OPENBRAIN_RUNTIME_URL || 'http://localhost:8080').replace(/\/+$/, '')
+  const root = String(baseUrl || process.env.OPENBRAIN_RUNTIME_URL || 'http://127.0.0.1:8080').replace(/\/+$/, '')
   return {
     async post(route, body) {
       const response = await fetch(`${root}${route}`, {

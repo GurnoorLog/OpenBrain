@@ -185,7 +185,7 @@ function mcpEndpointBase(): string {
   if (cloud && cloud.trim() !== '') return cloud.trim()
   const runtime = import.meta.env.VITE_RUNTIME_URL as string | undefined
   if (runtime && runtime.trim() !== '') return runtime.trim()
-  return 'http://localhost:8080'
+  return 'http://127.0.0.1:8080'
 }
 
 async function callNativeMcp(

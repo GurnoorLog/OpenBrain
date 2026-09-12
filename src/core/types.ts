@@ -64,16 +64,6 @@ export interface LogEntry {
   level: LogLevel
 }
 
-export interface NodeExecutionContext {
-  node: BrainNode
-  inputs: Record<string, unknown>
-  log: (message: string, level?: LogLevel) => void
-}
-
-export interface NodeExecutionResult {
-  outputs: Record<string, unknown>
-}
-
 export interface CapabilityDef {
   type: CapabilityType
   label: string
@@ -82,7 +72,6 @@ export interface CapabilityDef {
   accent: string
   inputs: PortSpec[]
   outputs: PortSpec[]
-  execute: (ctx: NodeExecutionContext) => Promise<NodeExecutionResult>
 }
 
 export interface BrainNodeSpec {

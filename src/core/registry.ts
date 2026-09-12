@@ -1,15 +1,5 @@
 import type { CapabilityDef, CapabilityType } from './types'
 
-const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms))
-const rand = (max: number) => Math.floor(Math.random() * max)
-
-let memoryStore: unknown = null
-
-const textOf = (inputs: Record<string, unknown>): string =>
-  Object.values(inputs)
-    .filter((v): v is string | number => typeof v === 'string' || typeof v === 'number')
-    .join('\n')
-
 export const CAPABILITIES: Record<CapabilityType, CapabilityDef> = {
   llm: {
     type: 'llm',
@@ -19,18 +9,6 @@ export const CAPABILITIES: Record<CapabilityType, CapabilityDef> = {
     accent: '#2dd4bf',
     inputs: [{ id: 'context', label: 'Context', type: 'text' }],
     outputs: [{ id: 'response', label: 'Response', type: 'text' }],
-    async execute(ctx) {
-      await sleep(900 + rand(600))
-      const context = textOf(ctx.inputs)
-      ctx.log('LLM reasoning over provided context', 'info')
-      return {
-        outputs: {
-          response: context
-            ? `Analysis of: "${context.slice(0, 64)}${context.length > 64 ? '…' : ''}"`
-            : 'Draft response generated.',
-        },
-      }
-    },
   },
   local: {
     type: 'local',
@@ -40,18 +18,6 @@ export const CAPABILITIES: Record<CapabilityType, CapabilityDef> = {
     accent: '#38bdf8',
     inputs: [{ id: 'context', label: 'Context', type: 'text' }],
     outputs: [{ id: 'response', label: 'Response', type: 'text' }],
-    async execute(ctx) {
-      await sleep(500 + rand(300))
-      const context = textOf(ctx.inputs)
-      ctx.log('Local model ready in browser (offline inference)', 'success')
-      return {
-        outputs: {
-          response: context
-            ? `Local: "${context.slice(0, 64)}${context.length > 64 ? '…' : ''}"`
-            : 'Local model generated a response.',
-        },
-      }
-    },
   },
   memory: {
     type: 'memory',
@@ -61,14 +27,6 @@ export const CAPABILITIES: Record<CapabilityType, CapabilityDef> = {
     accent: '#a78bfa',
     inputs: [{ id: 'value', label: 'Value', type: 'any' }],
     outputs: [{ id: 'stored', label: 'Stored', type: 'any' }],
-    async execute(ctx) {
-      await sleep(320 + rand(280))
-      const previous = memoryStore
-      const value = ctx.inputs['value'] ?? null
-      memoryStore = value
-      ctx.log('Memory updated with new context', 'info')
-      return { outputs: { stored: { previous, current: value } } }
-    },
   },
   planner: {
     type: 'planner',
@@ -78,16 +36,6 @@ export const CAPABILITIES: Record<CapabilityType, CapabilityDef> = {
     accent: '#fbbf24',
     inputs: [{ id: 'goal', label: 'Goal', type: 'text' }],
     outputs: [{ id: 'plan', label: 'Plan', type: 'list' }],
-    async execute(ctx) {
-      await sleep(500 + rand(300))
-      const goal = (ctx.inputs['goal'] as string | undefined) ?? 'the task'
-      ctx.log(`Planner decomposed: ${goal.slice(0, 48)}`, 'info')
-      return {
-        outputs: {
-          plan: ['Gather information', 'Analyze inputs', 'Synthesize result', 'Deliver output'],
-        },
-      }
-    },
   },
   browser: {
     type: 'browser',
@@ -100,15 +48,6 @@ export const CAPABILITIES: Record<CapabilityType, CapabilityDef> = {
       { id: 'pages', label: 'Pages', type: 'list' },
       { id: 'content', label: 'Content', type: 'text' },
     ],
-    async execute() {
-      await sleep(600 + rand(400))
-      return {
-        outputs: {
-          pages: [{ url: 'https://example.com', content: 'Example Domain' }],
-          content: 'Example Domain',
-        },
-      }
-    },
   },
   github: {
     type: 'github',
@@ -118,14 +57,6 @@ export const CAPABILITIES: Record<CapabilityType, CapabilityDef> = {
     accent: '#94a3b8',
     inputs: [],
     outputs: [{ id: 'repos', label: 'Repos', type: 'list' }],
-    async execute() {
-      await sleep(600 + rand(400))
-      return {
-        outputs: {
-          repos: ['acme/api-service', 'acme/web-app', 'acme/infra'],
-        },
-      }
-    },
   },
   filesystem: {
     type: 'filesystem',
@@ -135,14 +66,6 @@ export const CAPABILITIES: Record<CapabilityType, CapabilityDef> = {
     accent: '#f472b6',
     inputs: [{ id: 'path', label: 'Path', type: 'text' }],
     outputs: [{ id: 'content', label: 'Content', type: 'text' }],
-    async execute() {
-      await sleep(400 + rand(300))
-      return {
-        outputs: {
-          content: '# README\n\nProject scaffold initialized.\n\n- 12 source files\n- 4 modules\n',
-        },
-      }
-    },
   },
   python: {
     type: 'python',
@@ -152,12 +75,6 @@ export const CAPABILITIES: Record<CapabilityType, CapabilityDef> = {
     accent: '#4ade80',
     inputs: [{ id: 'code', label: 'Code', type: 'text' }],
     outputs: [{ id: 'result', label: 'Result', type: 'text' }],
-    async execute(ctx) {
-      await sleep(500 + rand(400))
-      ctx.log('Python executed script', 'info')
-      const source = (ctx.inputs['code'] as string | undefined) ?? 'print("ok")'
-      return { outputs: { result: `Executed ${source.length} chars → "ok"` } }
-    },
   },
   rag: {
     type: 'rag',
@@ -167,20 +84,6 @@ export const CAPABILITIES: Record<CapabilityType, CapabilityDef> = {
     accent: '#38bdf8',
     inputs: [{ id: 'query', label: 'Query', type: 'text' }],
     outputs: [{ id: 'documents', label: 'Documents', type: 'list' }],
-    async execute(ctx) {
-      await sleep(550 + rand(350))
-      const query = (ctx.inputs['query'] as string | undefined) ?? 'context'
-      ctx.log(`RAG retrieved documents for "${query.slice(0, 40)}"`, 'info')
-      return {
-        outputs: {
-          documents: [
-            `knowledge#1 — ${query} basics`,
-            `knowledge#2 — ${query} advanced`,
-            `knowledge#3 — ${query} patterns`,
-          ],
-        },
-      }
-    },
   },
   finetune: {
     type: 'finetune',
@@ -193,17 +96,6 @@ export const CAPABILITIES: Record<CapabilityType, CapabilityDef> = {
       { id: 'baseModel', label: 'Base model', type: 'text' },
     ],
     outputs: [{ id: 'model', label: 'Trained model', type: 'text' }],
-    async execute(ctx) {
-      await sleep(800 + rand(500))
-      const dataset = (ctx.inputs['dataset'] as string | undefined) ?? 'unknown dataset'
-      const baseModel = (ctx.inputs['baseModel'] as string | undefined) ?? 'unknown base model'
-      ctx.log(`Fine-tune planned on ${baseModel} using ${dataset}`, 'info')
-      return {
-        outputs: {
-          model: `hf://fine-tune-${String(baseModel).replace(/[^a-zA-Z0-9]+/g, '-').slice(0, 40)}`,
-        },
-      }
-    },
   },
   news: {
     type: 'news',
@@ -216,11 +108,6 @@ export const CAPABILITIES: Record<CapabilityType, CapabilityDef> = {
       { id: 'articles', label: 'Articles', type: 'list' },
       { id: 'headline', label: 'Headline', type: 'text' },
     ],
-    async execute(ctx) {
-      const query = (ctx.inputs['query'] as string | undefined) ?? 'technology'
-      ctx.log(`News fetch for "${query.slice(0, 40)}"`, 'info')
-      return { outputs: { articles: [], headline: `No news for "${query}"` } }
-    },
   },
   imagegen: {
     type: 'imagegen',
@@ -230,11 +117,6 @@ export const CAPABILITIES: Record<CapabilityType, CapabilityDef> = {
     accent: '#fb7185',
     inputs: [{ id: 'prompt', label: 'Prompt', type: 'text' }],
     outputs: [{ id: 'imageUrl', label: 'Image URL', type: 'text' }],
-    async execute(ctx) {
-      const prompt = (ctx.inputs['prompt'] as string | undefined) ?? 'a glowing AI brain'
-      ctx.log(`ImageGen for "${prompt.slice(0, 40)}"`, 'info')
-      return { outputs: { imageUrl: '', prompt } }
-    },
   },
   mcp: {
     type: 'mcp',
@@ -244,10 +126,6 @@ export const CAPABILITIES: Record<CapabilityType, CapabilityDef> = {
     accent: '#22d3ee',
     inputs: [{ id: 'input', label: 'Input', type: 'text' }],
     outputs: [{ id: 'result', label: 'Result', type: 'any' }],
-    async execute(ctx) {
-      ctx.log('MCP tool selected — configure the server in the node', 'info')
-      return { outputs: { result: null } }
-    },
   },
   tool: {
     type: 'tool',
@@ -257,10 +135,6 @@ export const CAPABILITIES: Record<CapabilityType, CapabilityDef> = {
     accent: '#22d3ee',
     inputs: [{ id: 'input', label: 'Input', type: 'text' }],
     outputs: [{ id: 'result', label: 'Result', type: 'any' }],
-    async execute(ctx) {
-      ctx.log('Tool node selected — configure the server in the node', 'info')
-      return { outputs: { result: null } }
-    },
   },
   worker: {
     type: 'worker',
@@ -270,12 +144,6 @@ export const CAPABILITIES: Record<CapabilityType, CapabilityDef> = {
     accent: '#a78bfa',
     inputs: [{ id: 'input', label: 'Input', type: 'any' }],
     outputs: [{ id: 'result', label: 'Result', type: 'any' }],
-    async execute(ctx) {
-      await sleep(400 + rand(300))
-      const context = textOf(ctx.inputs)
-      ctx.log(`Worker delegated: ${context.slice(0, 48) || 'no input'}`, 'info')
-      return { outputs: { result: null } }
-    },
   },
   output: {
     type: 'output',
@@ -288,18 +156,7 @@ export const CAPABILITIES: Record<CapabilityType, CapabilityDef> = {
       { id: 'download', label: 'Download report', type: 'boolean' },
     ],
     outputs: [],
-    async execute(ctx) {
-      await sleep(300 + rand(200))
-      const value = ctx.inputs['result']
-      const summary = typeof value === 'string' ? value : JSON.stringify(value) ?? '—'
-      ctx.log(`Output delivered: ${summary.slice(0, 80)}`, 'success')
-      return { outputs: {} }
-    },
   },
 }
 
 export const CAPABILITY_LIST: CapabilityDef[] = Object.values(CAPABILITIES)
-
-export function getCapability(type: CapabilityType): CapabilityDef {
-  return CAPABILITIES[type]
-}

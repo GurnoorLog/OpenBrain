@@ -25,7 +25,7 @@ function runtimeBaseUrl(): string {
   const configured = import.meta.env.VITE_RUNTIME_URL as string | undefined
   if (configured && configured.trim() !== '') return configured.trim().replace(/\/+$/, '')
   if (typeof location !== 'undefined' && location.origin && location.origin !== 'null') return location.origin
-  return 'http://localhost:8080'
+  return 'http://127.0.0.1:8080'
 }
 
 interface FineTuneServices {

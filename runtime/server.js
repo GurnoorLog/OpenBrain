@@ -549,7 +549,14 @@ async function handleLocalFinetune(req, res) {
   finetuneJobs.set(jobId, job)
   send(res, 200, { ok: true, jobId, status: job.status, targetDir })
 
-  const { runLocalFineTune } = require('./train-local.js')
+  let runLocalFineTune
+  try {
+    runLocalFineTune = require('./train-local.js').runLocalFineTune
+  } catch {
+    job.status = 'failed'
+    job.error = 'Trainer module missing on this runtime.'
+    return
+  }
   try {
     const outcome = await runLocalFineTune({
       spec,
@@ -560,8 +567,8 @@ async function handleLocalFinetune(req, res) {
         job.log.push(entry)
       },
       onProgress: (state) => {
-        if (state.type === 'progress') {
-          job.progress = Math.round((state.step_number || 0) + 1)
+        if (state.type === 'progress' && typeof state.step_number === 'number') {
+          job.progress = Math.max(job.progress, state.step_number + 1)
         }
       },
     })
@@ -811,7 +818,9 @@ const server = http.createServer((req, res) => {
     return
   }
   if (req.method === 'POST' && pathname === '/local/finetune') {
-    handleLocalFinetune(req, res)
+    handleLocalFinetune(req, res).catch((error) =>
+      send(res, 500, { ok: false, error: error instanceof Error ? error.message : String(error) }),
+    )
     return
   }
   const finetuneStatusMatch = /^\/local\/finetune\/([^/]+)$/.exec(pathname)

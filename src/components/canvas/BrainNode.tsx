@@ -1,7 +1,8 @@
 import { memo, useEffect, useState } from 'react'
 import { Handle, Position } from '@xyflow/react'
 import type { Node, NodeProps } from '@xyflow/react'
-import { NODE_HEADER, PORT_GAP } from '../../core/legacyArchitect'
+const NODE_HEADER = 56
+const PORT_GAP = 24
 import { CAPABILITIES } from '../../core/registry'
 import { useBrainStore } from '../../store/useBrainStore'
 import type { CapabilityType } from '../../core/types'

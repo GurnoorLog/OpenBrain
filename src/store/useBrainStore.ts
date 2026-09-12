@@ -7,7 +7,6 @@ import type {
   EditorMode,
   LogEntry,
   LogLevel,
-  ViewState,
 } from '../core/types'
 import type { ProviderId } from '../core/domain'
 import type { FineTuneJobSpec } from '../core/finetune'
@@ -101,7 +100,6 @@ export function canConnect(
 }
 
 export interface BrainStore {
-  view: ViewState
   mode: EditorMode
   showGrid: boolean
   paletteOpen: boolean
@@ -130,7 +128,6 @@ export interface BrainStore {
   thinking: string
   lastReasoning: string
   generationError: string | null
-  pendingQuestion: string | null
   pendingKeyRequest: KeyRequest | null
   clarify: ClarifyState | null
   past: Snapshot[]
@@ -147,10 +144,8 @@ export interface BrainStore {
   setThinking: (text: string) => void
   setLastReasoning: (text: string) => void
   setGenerationError: (error: string | null) => void
-  setPendingQuestion: (question: string | null) => void
   setPendingKeyRequest: (request: KeyRequest | null) => void
   setClarify: (state: ClarifyState | null) => void
-  setView: (view: Partial<ViewState>) => void
   setMode: (mode: EditorMode) => void
   setShowGrid: (showGrid: boolean) => void
   setPaletteOpen: (paletteOpen: boolean) => void
@@ -177,7 +172,6 @@ export interface BrainStore {
   addNode: (type: CapabilityType, x: number, y: number) => void
   addLocalNode: (modelId: string, x: number, y: number) => void
   removeElements: (nodeIds: string[], connectionIds: string[]) => void
-  removeNodes: (ids: string[]) => void
   removeConnections: (ids: string[]) => void
 
   connectConnection: (from: string, fromPort: string, to: string, toPort: string) => void
@@ -190,10 +184,7 @@ export interface BrainStore {
   redo: () => void
 }
 
-const DEFAULT_VIEW: ViewState = { scale: 1, x: 0, y: 0 }
-
 export const useBrainStore = create<BrainStore>((set, get) => ({
-  view: DEFAULT_VIEW,
   mode: 'select',
   showGrid: true,
   paletteOpen: false,
@@ -218,7 +209,6 @@ export const useBrainStore = create<BrainStore>((set, get) => ({
   thinking: '',
   lastReasoning: '',
   generationError: null,
-  pendingQuestion: null,
   pendingKeyRequest: null,
   clarify: null,
   past: [],
@@ -239,10 +229,8 @@ export const useBrainStore = create<BrainStore>((set, get) => ({
   setThinking: (thinking) => set({ thinking }),
   setLastReasoning: (lastReasoning) => set({ lastReasoning }),
   setGenerationError: (generationError) => set({ generationError }),
-  setPendingQuestion: (pendingQuestion) => set({ pendingQuestion }),
   setPendingKeyRequest: (pendingKeyRequest) => set({ pendingKeyRequest }),
   setClarify: (clarify) => set({ clarify }),
-  setView: (view) => set((state) => ({ view: { ...state.view, ...view } })),
 
   setMode: (mode) => set({ mode }),
 
@@ -364,7 +352,7 @@ export const useBrainStore = create<BrainStore>((set, get) => ({
   stopGeneration: () => {
     generationController?.abort()
     generationController = null
-    set({ generating: false, thinking: '', generationError: null, pendingQuestion: null, clarify: null })
+    set({ generating: false, thinking: '', generationError: null, clarify: null })
   },
 
   addNode: (type, x, y) =>
@@ -418,8 +406,6 @@ export const useBrainStore = create<BrainStore>((set, get) => ({
         future: [],
       }
     }),
-
-  removeNodes: (ids) => get().removeElements(ids, []),
 
   removeConnections: (ids) => get().removeElements([], ids),
 

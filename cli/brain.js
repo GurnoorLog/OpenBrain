@@ -238,8 +238,8 @@ async function cmdDoctor() {
   console.log('')
   // Reachability of local services.
   for (const [name, url] of [
-    ['ollama', process.env.OLLAMA_URL || 'http://localhost:11434'],
-    ['runtime', `http://localhost:${process.env.PORT || 8080}`],
+    ['ollama', process.env.OLLAMA_URL || 'http://127.0.0.1:11434'],
+    ['runtime', `http://127.0.0.1:${process.env.PORT || 8080}`],
   ]) {
     try {
       const controller = new AbortController()
@@ -274,14 +274,20 @@ async function cmdPlugins(args) {
 }
 
 async function cmdLogs() {
-  const logDir = path.join(process.env.WORKSPACE_DIR || path.join(process.cwd(), 'workspace'), '.logs')
-  const file = path.join(logDir, 'runtime.log')
-  if (!fs.existsSync(file)) {
-    console.log('No runtime log found yet. Start the Runtime and run a brain first.')
+  const runsFile = path.join(process.env.WORKSPACE_DIR || path.join(process.cwd(), 'workspace'), '.agents', 'runs.jsonl')
+  if (!fs.existsSync(runsFile)) {
+    console.log('No agent runs yet. Start the Runtime, run a brain, and try again.')
     return
   }
-  const lines = fs.readFileSync(file, 'utf8').trim().split('\n')
-  for (const line of lines.slice(-50)) console.log(line)
+  const lines = fs.readFileSync(runsFile, 'utf8').trim().split('\n')
+  for (const line of lines.slice(-50)) {
+    try {
+      const entry = JSON.parse(line)
+      console.log(`[${entry.at || entry.timestamp || '?'}] ${entry.kind || 'run'}: ${entry.agentId || entry.brain || ''} ${entry.status || ''}${entry.error ? ' ✗ ' + entry.error : ''}`)
+    } catch {
+      console.log(line)
+    }
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -296,14 +302,28 @@ const [, , command, ...args] = process.argv
       cmdOpen(args[0])
       break
     case 'run': {
-      const messageIdx = args.findIndex((a) => a === '--message')
-      const message = messageIdx >= 0 ? args[messageIdx + 1] : undefined
-      const file = args.find((a) => !a.startsWith('--'))
+      let message
+      const positional = []
+      for (let i = 0; i < args.length; i++) {
+        if (args[i] === '--message') {
+          message = args[++i]
+        } else if (args[i].startsWith('--')) {
+          continue
+        } else {
+          positional.push(args[i])
+        }
+      }
+      const file = positional[0]
       if (!file) {
         console.error('✗ usage: brain run <file.brain> [--message "…"]')
         process.exitCode = 1
       } else {
-        await cmdRun(file, message)
+        if (positional.length > 1) {
+          console.error(`✗ unexpected arguments: ${positional.slice(1).join(' ')} (flags must use --flag form)`)
+          process.exitCode = 1
+        } else {
+          await cmdRun(file, message)
+        }
       }
       break
     }

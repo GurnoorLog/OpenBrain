@@ -88,15 +88,16 @@ export async function createRunner({ brain, runtimeUrl, forceLocal, knowledgeDir
     runtimeUrl: requested,
     mcpFile: mcpConfig.file,
     mcpServers: Object.keys(mcpConfig.servers),
-    async run({ message, memory = '', onLog, onToken, onEvent }) {
+    async run({ message, memory = '', onLog, onToken, onEvent, brain: brainOverride }) {
       // Stamp the user's message onto every llm node (mirrors the browser's
       // chat pill) so agents work even on brains with no input edges.
-      const nodes = brain.graph.nodes.map((node) =>
+      const target = brainOverride || brain
+      const nodes = target.graph.nodes.map((node) =>
         node.type === 'llm'
           ? { ...node, configuration: { ...(node.configuration || {}), userMessage: message } }
           : node,
       )
-      const connections = brain.graph.connections || []
+      const connections = target.graph.connections || []
 
       if (backend === 'runtime') {
         const response = await fetch(`${requested}/run`, {
