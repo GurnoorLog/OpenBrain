@@ -228,7 +228,7 @@ async function cmdDoctor() {
   const checks = [
     ['FIREWORKS_API_KEY', Boolean(process.env.FIREWORKS_API_KEY), 'LLM/architect provider'],
     ['COMPOSIO_API_KEY', Boolean(process.env.COMPOSIO_API_KEY), 'GitHub / MCP tool nodes'],
-    ['OLLAMA_URL', process.env.OLLAMA_URL || 'http://localhost:11434', 'local models'],
+    ['OLLAMA_URL', process.env.OLLAMA_URL || 'http://127.0.0.1:11434', 'local models'],
   ]
   for (const [name, set, purpose] of checks) {
     const url = typeof set === 'string' ? set : null

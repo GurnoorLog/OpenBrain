@@ -166,6 +166,7 @@ export class WorkerNodeExecutor implements NodeExecutor {
       registry.register(tool.nodeType, new ToolNodeExecutor(tool))
     }
     registry.register('worker', new WorkerNodeExecutor())
+    registry.register('subbrain', new WorkerNodeExecutor())
     this.registry = registry
     return registry
   }

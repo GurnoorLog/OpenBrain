@@ -1,21 +1,36 @@
 'use strict'
 
-// Shared graph-execution core for the OpenBrain cloud executor.
+// Shared graph-execution core for the OpenBrain runtime, CLI and cloud
+// executor. One executor, three entry points — the TUI (node), the CLI and
+// the runtime server all load this same file.
 //
 // Runs the exact same brain model as the in-browser engine: a topological
 // pass over the graph, each node receiving inputs keyed by incoming edge
-// port (inputs[targetPort] = sourceOutputs[sourcePort]), executed with the
-// same canned fallbacks for non-LLM node types. The only difference is LLM
-// nodes call Fireworks with a SERVER-SIDE key (env, never exposed to the
-// browser) instead of the user's client key.
+// port (inputs[targetPort] = sourceOutputs[sourcePort]).
+//
+// Every node type has a real implementation here:
+//   - llm        calls Ollama (OLLAMA_URL) when configured, otherwise
+//                Fireworks with a server-side key (FIREWORKS_API_KEY)
+//   - planner    decomposes the goal into steps with the LLM
+//   - python     executes the script with the host Python (local runs)
+//   - filesystem reads/writes real files under the workspace dir
+//   - rag        keyword retrieval over a local knowledge base directory
+//   - browser    real fetch (Wikipedia API for articles, HTML stripping
+//                otherwise)
+//   - github/tool/mcp route through the native MCP client
+//   - finetune   runs the real local trainer (torch/peft)
+//   - worker/subbrain delegate to saved project brains or curated skills
+//   - gate       evaluates the configured condition against node inputs
 //
 // Zero runtime dependencies — plain Node 18+ (global fetch, node:http).
 
 const fs = require('node:fs')
 const fsp = require('node:fs/promises')
 const path = require('node:path')
+const { spawn, spawnSync } = require('node:child_process')
 
 const DEFAULT_LLM_MODEL = 'accounts/fireworks/models/deepseek-v4-flash'
+const DEFAULT_OLLAMA_MODEL = 'qwen2.5:7b'
 
 // --------------------------------------------------------------------------
 // Real browser + RAG support (no canned placeholders)
@@ -359,6 +374,324 @@ async function runFireworks(messages, { model, temperature = 0.7, maxTokens = 80
 }
 
 // --------------------------------------------------------------------------
+// LLM backends: Ollama (local, no key) and Fireworks (cloud, server-side key)
+// --------------------------------------------------------------------------
+
+function ollamaBaseUrl() {
+  return (process.env.OLLAMA_URL || 'http://127.0.0.1:11434').replace(/\/+$/, '')
+}
+
+// Local models need no key: reads OLLAMA_URL (default localhost:11434) and
+// speaks Ollama's native /api/chat (streaming NDJSON when onToken is given,
+// so the TUI keeps its live typing effect for local models too).
+async function runOllama(messages, { model = DEFAULT_OLLAMA_MODEL, temperature = 0.7, maxTokens = 2048, signal, onToken }) {
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), 180000)
+  const onSignalAbort = () => controller.abort()
+  if (signal) {
+    if (signal.aborted) throw new Error('Request aborted by client.')
+    signal.addEventListener('abort', onSignalAbort, { once: true })
+  }
+  try {
+    const response = await fetch(`${ollamaBaseUrl()}/api/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model,
+        messages,
+        stream: onToken ? true : false,
+        options: { temperature, num_predict: maxTokens },
+      }),
+      signal: controller.signal,
+    })
+    if (!response.ok) {
+      const detail = await response.text().catch(() => '')
+      throw new Error(`Ollama ${response.status} at ${ollamaBaseUrl()}: ${detail.slice(0, 200)}`)
+    }
+    if (onToken) {
+      if (!response.body) throw new Error('Ollama stream returned no body.')
+      const reader = response.body.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ''
+      let full = ''
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        buffer += decoder.decode(value, { stream: true })
+        const lines = buffer.split('\n')
+        buffer = lines.pop() ?? ''
+        for (const line of lines) {
+          const trimmed = line.trim()
+          if (trimmed === '') continue
+          try {
+            const parsed = JSON.parse(trimmed)
+            const delta = parsed.message?.content
+            if (typeof delta === 'string' && delta !== '') {
+              full += delta
+              onToken(delta)
+            }
+            if (parsed.done) break
+          } catch {
+            // ignore malformed keep-alive frames
+          }
+        }
+      }
+      if (full.trim() === '') throw new Error('Ollama returned an empty completion.')
+      return full
+    }
+    const data = await response.json()
+    const content = data?.message?.content
+    if (typeof content !== 'string' || content.trim() === '') {
+      throw new Error('Ollama returned an empty completion.')
+    }
+    return content
+  } finally {
+    clearTimeout(timeout)
+    signal?.removeEventListener('abort', onSignalAbort)
+  }
+}
+
+// RFC 4287 lets a run use whatever backend is actually configured: Ollama when
+// OLLAMA_URL is set (unless a cloud model id was explicitly requested), else
+// Fireworks when the server-side key exists, else the local default anyway
+// (so "free, no key" local runs work out of the box).
+function isCloudModel(modelId) {
+  return typeof modelId === 'string' && modelId.startsWith('accounts/')
+}
+
+function pickLLMBackend(modelId) {
+  const wantsCloud = isCloudModel(modelId)
+  if (process.env.OLLAMA_URL && !wantsCloud) return 'ollama'
+  if (process.env.FIREWORKS_API_KEY) return 'fireworks'
+  if (wantsCloud && !process.env.FIREWORKS_API_KEY) {
+    throw new Error('FIREWORKS_API_KEY is not set on the cloud executor.')
+  }
+  return 'ollama'
+}
+
+async function callLLM(messages, { model, temperature, maxTokens, signal, onToken }) {
+  const backend = pickLLMBackend(model)
+  if (backend === 'fireworks') {
+    const cloudModel = isCloudModel(model) ? model : DEFAULT_LLM_MODEL
+    return runFireworks(messages, { model: cloudModel, temperature, maxTokens, signal, onToken })
+  }
+  const localModel = !isCloudModel(model) && model !== '' ? model : DEFAULT_OLLAMA_MODEL
+  try {
+    return await runOllama(messages, { model: localModel, temperature, maxTokens, signal, onToken })
+  } catch (error) {
+    if (process.env.OLLAMA_URL) throw error
+    const message = error instanceof Error ? error.message : String(error)
+    throw new Error(
+      `No LLM backend reachable. Set FIREWORKS_API_KEY (cloud) or start Ollama at ${ollamaBaseUrl()} (local). ${message}`,
+    )
+  }
+}
+
+// --------------------------------------------------------------------------
+// Real planner: decompose the goal with the LLM; fall back to splitting the
+// goal's own wording when no model is available (never generic canned steps)
+// --------------------------------------------------------------------------
+
+const PLAN_PARSE_LIMIT = 8
+
+function splitGoalClauses(task) {
+  const clauses = task
+    .replace(/^[\s\d.\-–—)]+/, '')
+    .split(/\s*\n\s*|\s+.\s{0,2}(?=[A-Z0-9])|\s*[.;!?]\s+/)
+    .map((clause) => clause.trim())
+    .filter((clause) => clause.length > 2)
+  if (clauses.length >= 2) return clauses.slice(0, PLAN_PARSE_LIMIT)
+  return [`Handle: ${task}`.trim()]
+}
+
+async function planTask(goal, signal) {
+  const task = String(goal || '').trim()
+  if (task === '') {
+    return { plan: [], error: 'Planner needs a goal from a connected node or the chat request.' }
+  }
+  try {
+    const planText = await callLLM(
+      [
+        {
+          role: 'system',
+          content:
+            'You are a planning engine. Break the user\'s goal into a short list of concrete steps. ' +
+            'Reply with ONLY the steps, one per line, no numbers, no bullets, no preamble.',
+        },
+        { role: 'user', content: task },
+      ],
+      { model: DEFAULT_OLLAMA_MODEL, temperature: 0.3, maxTokens: 500, signal },
+    )
+    const steps = planText
+      .split('\n')
+      .map((line) => line.replace(/^[\s\d.\-–—)]+/, '').trim())
+      .filter((line) => line !== '')
+    if (steps.length > 0) return { plan: steps.slice(0, PLAN_PARSE_LIMIT), model: true }
+  } catch {
+    // model unavailable — derive steps from the goal's own wording
+  }
+  return { plan: splitGoalClauses(task), model: false }
+}
+
+// --------------------------------------------------------------------------
+// Real python node: run the script with the host interpreter when present
+// --------------------------------------------------------------------------
+
+const PYTHON_TIMEOUT_MS = 20000
+
+function containerized() {
+  return fs.existsSync('/.dockerenv')
+}
+
+function pythonEnabled() {
+  if (containerized() && process.env.ENABLE_PYTHON_EXEC !== '1') {
+    return { ok: false, reason: 'Python execution is disabled inside the container (set ENABLE_PYTHON_EXEC=1 to allow it).' }
+  }
+  return { ok: true }
+}
+
+function resolvePythonBinary() {
+  const candidates = process.env.PYTHON_BIN
+    ? [process.env.PYTHON_BIN]
+    : process.platform === 'win32'
+      ? ['python', 'py']
+      : ['python3', 'python']
+  for (const binary of candidates) {
+    try {
+      const probe = spawnSync(binary, ['--version'], { timeout: 8000, windowsHide: true })
+      if (probe.status === 0) return binary
+    } catch {
+      /* keep looking */
+    }
+  }
+  return null
+}
+
+function workspaceDir() {
+  return process.env.WORKSPACE_DIR || path.join(process.env.CLOUD_EXECUTOR_CWD || process.cwd(), 'workspace')
+}
+
+async function runPythonScript(source, { signal }) {
+  const binary = resolvePythonBinary()
+  if (!binary) throw new Error('Python interpreter not found on this machine (set PYTHON_BIN or install Python).')
+  return new Promise((resolve, reject) => {
+    const child = spawn(binary, ['-c', source], { cwd: workspaceDir(), windowsHide: true })
+    let stdout = ''
+    let stderr = ''
+    let settled = false
+    const timer = setTimeout(() => {
+      if (settled) return
+      settled = true
+      child.kill('SIGKILL')
+      reject(new Error(`Python script timed out after ${PYTHON_TIMEOUT_MS / 1000}s.`))
+    }, PYTHON_TIMEOUT_MS)
+    const onAbort = () => {
+      if (settled) return
+      settled = true
+      child.kill('SIGKILL')
+      reject(new Error('Python execution aborted by client.'))
+    }
+    signal?.addEventListener('abort', onAbort, { once: true })
+    child.stdout.on('data', (chunk) => { stdout += chunk })
+    child.stderr.on('data', (chunk) => { stderr += chunk })
+    child.on('error', (error) => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
+      signal?.removeEventListener('abort', onAbort)
+      reject(error)
+    })
+    child.on('close', (code) => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
+      signal?.removeEventListener('abort', onAbort)
+      resolve({ code: code ?? 0, stdout: stdout.trimEnd(), stderr: stderr.trimEnd() })
+    })
+  })
+}
+
+// --------------------------------------------------------------------------
+// Real filesystem node: read/write real files inside the workspace dir
+// --------------------------------------------------------------------------
+
+function workspacePath(relative) {
+  if (typeof relative !== 'string' || relative.trim() === '') return null
+  const root = path.resolve(workspaceDir())
+  const target = path.resolve(root, relative)
+  if (target !== root && !target.startsWith(root + path.sep)) {
+    throw new Error(`Path "${relative}" escapes the workspace ("${root}").`)
+  }
+  return target
+}
+
+async function readWorkspaceFile(relative) {
+  const target = workspacePath(relative)
+  if (!target) return null
+  const raw = await fsp.readFile(target, 'utf8')
+  return { path: target, content: raw, size: Buffer.byteLength(raw, 'utf8') }
+}
+
+async function writeWorkspaceFile(relative, content) {
+  const target = workspacePath(relative)
+  if (!target) throw new Error('Filesystem write needs configuration.path.')
+  await fsp.mkdir(path.dirname(target), { recursive: true })
+  const body = typeof content === 'string' ? content : content === undefined ? '' : JSON.stringify(content, null, 2)
+  await fsp.writeFile(target, body, 'utf8')
+  return { path: target, content: body, size: Buffer.byteLength(body, 'utf8') }
+}
+
+// --------------------------------------------------------------------------
+// Real gate node: evaluate the configured condition against node inputs
+// --------------------------------------------------------------------------
+
+function evaluateGateCondition(expression, inputs) {
+  const raw = expression === undefined || expression === null ? '' : String(expression).trim()
+  const value = firstValue(inputs)
+  const valueLower = String(value).toLowerCase()
+  const check = (op, test, describe) => {
+    const index = raw.indexOf(op)
+    return index !== -1 ? { matched: true, passed: test(raw.slice(index + op.length).trim()), reason: describe } : null
+  }
+  if (raw !== '') {
+    const numeric = (side) => {
+      const parsed = Number(side)
+      return Number.isNaN(parsed) ? NaN : parsed
+    }
+    const operators = [
+      () => check('>=', (v) => numeric(value) >= numeric(v), `"${value}" >= "${raw.slice(raw.indexOf('>=') + 2).trim()}"`),
+      () => check('<=', (v) => numeric(value) <= numeric(v), `"${value}" <= "${raw.slice(raw.indexOf('<=') + 2).trim()}"`),
+      () => check('!==', (v) => String(value) !== v, `"${value}" !== "${raw.slice(raw.indexOf('!==') + 3).trim()}"`),
+      () => check('===', (v) => String(value) === v, `"${value}" === "${raw.slice(raw.indexOf('===') + 3).trim()}"`),
+      () => check('!=', (v) => String(value) !== v && numeric(value) !== numeric(v), `"${value}" != "${raw.slice(raw.indexOf('!=') + 2).trim()}"`),
+      () => check('==', (v) => String(value) === v || numeric(value) === numeric(v), `"${value}" == "${raw.slice(raw.indexOf('==') + 2).trim()}"`),
+      () => check('>', (v) => numeric(value) > numeric(v), `"${value}" > "${raw.slice(raw.indexOf('>') + 1).trim()}"`),
+      () => check('<', (v) => numeric(value) < numeric(v), `"${value}" < "${raw.slice(raw.indexOf('<') + 1).trim()}"`),
+      () => check('contains', (v) => valueLower.includes(v.toLowerCase()), `"${value}" contains "${raw.slice(raw.indexOf('contains') + 8).trim()}"`),
+      () => check('startsWith', (v) => valueLower.startsWith(v.toLowerCase()), `"${value}" startsWith "${raw.slice(raw.indexOf('startsWith') + 10).trim()}"`),
+      () => check('endsWith', (v) => valueLower.endsWith(v.toLowerCase()), `"${value}" endsWith "${raw.slice(raw.indexOf('endsWith') + 8).trim()}"`),
+    ]
+    for (const candidate of operators) {
+      const outcome = candidate()
+      if (outcome && outcome.matched) {
+        return { passed: outcome.passed, reason: outcome.reason }
+      }
+    }
+    const lower = raw.toLowerCase()
+    if (lower === 'true') return { passed: true, reason: 'condition is "true"' }
+    if (lower === 'false') return { passed: false, reason: 'condition is "false"' }
+    return { passed: raw !== '', reason: `expression "${raw}" evaluated as truthy` }
+  }
+  const hasTruthyInput = Object.values(inputs).some(
+    (item) => item !== undefined && item !== null && item !== '' && item !== false && !(Array.isArray(item) && item.length === 0),
+  )
+  return {
+    passed: hasTruthyInput,
+    reason: hasTruthyInput ? 'an input value is present' : 'no input value provided to the gate',
+  }
+}
+
+// --------------------------------------------------------------------------
 // Curated skills (SKILL.md) as server-side sub-brains
 // --------------------------------------------------------------------------
 
@@ -520,8 +853,6 @@ function collectInputs(nodeId, connections, outputs) {
   return inputs
 }
 
-const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
-
 // Executes a brain graph. `nodes` and `connections` use the store shape
 // (BrainNodeSpec / Connection: id, type, x, y, content, reason, model, from,
 // fromPort, to, toPort). Returns resolved node outputs keyed by node id plus
@@ -565,7 +896,7 @@ async function executeBrain({ nodes, connections, memory, mcp, onLog, onToken, o
     let result
     switch (node.type) {
       case 'llm': {
-        pushLog('Cloud LLM querying the model server.', 'info', nodeId)
+        pushLog('LLM node querying the configured model backend.', 'info', nodeId)
         // The chat/CLI stamps the user's message onto configuration.userMessage
         // (mirrors the browser engine). Combined with edge-fed context so both
         // graph-inputs and interactive agents can drive the same node.
@@ -578,12 +909,15 @@ async function executeBrain({ nodes, connections, memory, mcp, onLog, onToken, o
           typeof inputs.history === 'string' && inputs.history.trim() !== ''
             ? `\n\n(From memory — prior runs of this brain:\n${inputs.history.trim()})`
             : ''
-        const model = typeof config.model === 'string' && config.model !== '' ? config.model : (process.env.CLOUD_LLM_MODEL || DEFAULT_LLM_MODEL)
+        const requestedModel = typeof config.model === 'string' && config.model !== '' ? config.model : ''
+        const model = requestedModel
+          ? requestedModel
+          : (process.env.CLOUD_LLM_MODEL || DEFAULT_LLM_MODEL)
         const instructions =
           typeof config.instructions === 'string' && config.instructions.trim() !== ''
             ? config.instructions.trim()
             : ''
-        const response = await runFireworks(
+        const response = await callLLM(
           [
             ...(instructions !== '' ? [{ role: 'system', content: instructions }] : []),
             { role: 'user', content: `${prompt}${memoryNote}` },
@@ -596,8 +930,10 @@ async function executeBrain({ nodes, connections, memory, mcp, onLog, onToken, o
             onToken,
           },
         )
-        pushLog(`Cloud LLM answered (${model}).`, 'success', nodeId)
-        result = { response, model }
+        let modelUsed = model
+        if (pickLLMBackend(model) === 'ollama' && !isCloudModel(model)) modelUsed = model || DEFAULT_OLLAMA_MODEL
+        pushLog(`LLM node answered (${modelUsed}).`, 'success', nodeId)
+        result = { response, model: modelUsed }
         break
       }
 
@@ -615,12 +951,41 @@ async function executeBrain({ nodes, connections, memory, mcp, onLog, onToken, o
       }
 
       case 'filesystem': {
-        const content =
-          typeof config.content === 'string' && config.content.trim() !== ''
-            ? config.content
-            : '# README\n\nProject scaffold initialized (cloud run).'
-        pushLog('Filesystem read node content.', 'info', nodeId)
-        result = { content }
+        const operation = typeof config.operation === 'string' ? config.operation.trim().toLowerCase() : 'read'
+        const relative = (typeof config.path === 'string' ? config.path : typeof config.file === 'string' ? config.file : '') || ''
+        const staticContent = typeof config.content === 'string' ? config.content : ''
+        try {
+          if (operation === 'write') {
+            const target = workspacePath(relative)
+            if (!target) {
+              pushLog('Filesystem write needs configuration.path.', 'warning', nodeId)
+              result = { operation: 'write', error: 'Filesystem write needs configuration.path.', path: null }
+              break
+            }
+            const written = await writeWorkspaceFile(relative, staticContent)
+            pushLog(`Filesystem wrote ${written.path} (${written.size} bytes).`, 'info', nodeId)
+            result = { operation: 'write', path: written.path, content: written.content, size: written.size }
+          } else if (relative !== '') {
+            const file = await readWorkspaceFile(relative)
+            if (!file) {
+              pushLog(`Filesystem: nothing at "${relative}".`, 'warning', nodeId)
+              result = { operation: 'read', path: relative, content: '', error: 'File not found.' }
+              break
+            }
+            pushLog(`Filesystem read ${file.path} (${file.size} bytes).`, 'info', nodeId)
+            result = { operation: 'read', path: file.path, content: file.content, size: file.size }
+          } else if (staticContent.trim() !== '') {
+            pushLog('Filesystem: no path set — returning the configured content.', 'info', nodeId)
+            result = { operation: 'read', path: null, content: staticContent, size: Buffer.byteLength(staticContent, 'utf8') }
+          } else {
+            pushLog('Filesystem: set configuration.operation/path to read or write a workspace file.', 'warning', nodeId)
+            result = { operation: 'read', path: null, content: '', error: 'No path or content configured on the filesystem node.' }
+          }
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error)
+          pushLog(`Filesystem failed: ${message}`, 'error', nodeId)
+          result = { operation, path: relative || null, error: message }
+        }
         break
       }
 
@@ -640,10 +1005,25 @@ async function executeBrain({ nodes, connections, memory, mcp, onLog, onToken, o
         result = { response: llmContext(inputs), modelId: null, error: 'local-only' }
         break
 
-      case 'planner':
-        pushLog('Planner decomposed the task.', 'info', nodeId)
-        result = { plan: ['Gather information', 'Analyze inputs', 'Synthesize result', 'Deliver output'] }
+      case 'planner': {
+        const goal =
+          (typeof config.goal === 'string' ? config.goal.trim() : '') ||
+          firstValue(inputs) ||
+          userMessage ||
+          ''
+        if (goal === '') {
+          pushLog('Planner: no goal available — connect a node that feeds it, or type a request.', 'warning', nodeId)
+          result = { plan: [], error: 'Planner needs a goal from a connected node or the chat request.', goal: '' }
+          break
+        }
+        pushLog(`Planner decomposing "${goal.slice(0, 60)}"...`, 'info', nodeId)
+        const { plan, model } = await planTask(goal, node._signal)
+        if (model) pushLog(`Planner produced ${plan.length} step(s) with the LLM.`, 'success', nodeId)
+        else pushLog(`Planner produced ${plan.length} step(s) from the goal's own wording (no model reachable).`, 'info', nodeId)
+        emit({ kind: 'plan-done', nodeId, count: plan.length, steps: plan })
+        result = { plan, goal }
         break
+      }
 
       case 'browser': {
         const configUrl =
@@ -709,15 +1089,66 @@ async function executeBrain({ nodes, connections, memory, mcp, onLog, onToken, o
         break
       }
 
-      case 'python':
-        pushLog('Python executed script in the cloud.', 'info', nodeId)
-        result = { result: `Executed ${(firstValue(inputs) || 'print("ok")').length} chars → "ok"` }
+      case 'python': {
+        const source = (typeof config.code === 'string' ? config.code : '') || firstValue(inputs) || ''
+        const allowed = pythonEnabled()
+        if (!allowed.ok) {
+          pushLog(`Python: ${allowed.reason}`, 'warning', nodeId)
+          result = { result: null, error: allowed.reason, code: null }
+          break
+        }
+        if (source.trim() === '') {
+          pushLog('Python: no script provided — set configuration.code or connect a node that feeds it.', 'warning', nodeId)
+          result = { result: null, error: 'No Python source to execute.', code: null }
+          break
+        }
+        pushLog(`Python executing ${source.length} chars of script with the host interpreter.`, 'info', nodeId)
+        try {
+          const outcome = await runPythonScript(source, { signal: node._signal })
+          if (outcome.code === 0) {
+            pushLog('Python exited 0.', 'success', nodeId)
+            result = { result: outcome.stdout, stderr: outcome.stderr || null, code: outcome.code }
+          } else {
+            pushLog(`Python exited ${outcome.code}: ${(outcome.stderr || outcome.stdout || '').slice(0, 200)}`, 'error', nodeId)
+            result = { result: outcome.stdout || null, error: outcome.stderr || `exit ${outcome.code}`, code: outcome.code }
+          }
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error)
+          pushLog(`Python failed: ${message}`, 'error', nodeId)
+          result = { result: null, error: message, code: null }
+        }
         break
+      }
 
-      case 'agent':
-        pushLog(`Agent delegated: ${firstValue(inputs) || 'the task'}`, 'info', nodeId)
-        result = { result: `Sub-agent reported back on "${firstValue(inputs) || 'the task'}"` }
+      case 'agent': {
+        const task = (typeof config.task === 'string' ? config.task.trim() : '') || firstValue(inputs) || userMessage || ''
+        if (task === '') {
+          pushLog('Agent: no task provided — connect a node that feeds it, or type a request.', 'warning', nodeId)
+          result = { result: null, error: 'Agent node needs a task from a connected node or the chat request.' }
+          break
+        }
+        pushLog(`Agent working on: ${task.slice(0, 80)}`, 'info', nodeId)
+        try {
+          const response = await callLLM(
+            [
+              {
+                role: 'system',
+                content:
+                  'You are a sub-agent inside a larger OpenBrain run. Your job is to carry out the delegated task and return a concise, finished result for the parent agent. Do not ask follow-up questions.',
+              },
+              { role: 'user', content: task },
+            ],
+            { model: typeof config.model === 'string' ? config.model : DEFAULT_LLM_MODEL, temperature: 0.4, maxTokens: 1024, signal: node._signal },
+          )
+          pushLog('Agent delivered its result.', 'success', nodeId)
+          result = { result: response, model: typeof config.model === 'string' ? config.model : null }
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error)
+          pushLog(`Agent failed: ${message}`, 'error', nodeId)
+          result = { result: null, error: message }
+        }
         break
+      }
 
       case 'finetune': {
         const { trainer, error } = loadLocalTrainer()
@@ -778,16 +1209,19 @@ async function executeBrain({ nodes, connections, memory, mcp, onLog, onToken, o
         break
       }
 
-      case 'gate':
-        pushLog(inputs.condition === false ? 'Gate blocked.' : 'Gate passed.', 'info', nodeId)
-        result = { passed: inputs.condition !== false }
+      case 'gate': {
+        const expression = typeof config.condition === 'string' ? config.condition : ''
+        const evaluation = evaluateGateCondition(expression, inputs)
+        pushLog(
+          evaluation.passed ? `Gate passed (${evaluation.reason}).` : `Gate blocked (${evaluation.reason}).`,
+          evaluation.passed ? 'info' : 'warning',
+          nodeId,
+        )
+        result = { passed: evaluation.passed, reason: evaluation.reason }
         break
+      }
 
       case 'subbrain':
-        pushLog('Sub-brain invoked.', 'info', nodeId)
-        result = { result: { nested: true, status: 'ok' } }
-        break
-
       case 'worker': {
         const brainRef =
           typeof config.brain === 'string' && config.brain.trim() !== ''
@@ -890,9 +1324,8 @@ async function executeBrain({ nodes, connections, memory, mcp, onLog, onToken, o
       }
 
       default:
-        await delay(150)
-        pushLog('Node executed with canned output.', 'info', nodeId)
-        result = { result: { processed: Object.keys(inputs), ok: true } }
+        pushLog(`Unknown node type "${String(node.type)}" — no executor exists for it.`, 'warning', nodeId)
+        result = { result: null, error: `Unknown node type: ${String(node.type)}` }
     }
 
     outputs[nodeId] = result
@@ -907,4 +1340,4 @@ async function executeBrain({ nodes, connections, memory, mcp, onLog, onToken, o
   }
 }
 
-module.exports = { executeBrain, runFireworks, DEFAULT_LLM_MODEL }
+module.exports = { executeBrain, retrieveKnowledge, runFireworks, DEFAULT_LLM_MODEL }

@@ -12,6 +12,8 @@
 //   POST /composio      -> legacy proxy for the SPA's in-browser GitHub tools
 //   GET  /fetch?url=    -> server-side page fetch for the Browser node
 //   POST /local/files   -> read/write/list files in the user's WORKSPACE
+//   POST /local/python  -> run code on the host Python (with a real exit code)
+//   POST /local/rag     -> retrieve knowledge context from the knowledge dir
 //   POST /local/finetune-> launch a local fine-tune job in the workspace
 //   GET  /registry      -> list .brain files stored in the local registry
 //   POST /registry      -> save a .brain file into the registry
@@ -26,6 +28,7 @@ const http = require('node:http')
 const fs = require('node:fs')
 const fsp = require('node:fs/promises')
 const path = require('node:path')
+const { spawn, spawnSync } = require('node:child_process')
 
 // brain-core is the shared graph executor (same file the cloud uses). Resolved
 // from the runtime dir in Docker, or from cloud-executor in the repo.
@@ -39,7 +42,7 @@ function loadBrainCore() {
   }
   throw new Error('brain-core.js not found next to the runtime.')
 }
-const { executeBrain } = loadBrainCore()
+const { executeBrain, retrieveKnowledge } = loadBrainCore()
 
 // agent-daemon is the scheduler that runs .brain files with an `agent` block.
 // Resolved next to the runtime in Docker, or from the repo runtime dir.
@@ -591,6 +594,114 @@ async function handleFinetuneStatus(req, res, jobId) {
 }
 
 // --------------------------------------------------------------------------
+// /local/python — execute Python on the host where the runtime runs. The
+// browser cannot spawn processes, so the Python node routes through here.
+// Finds a real interpreter (PYTHON_BIN, python/py on Windows, python3/python
+// elsewhere) and reports the real exit code. No interpreter -> honest error.
+// --------------------------------------------------------------------------
+const PYTHON_TIMEOUT_MS = 20000
+
+function resolveLocalPython() {
+  const candidates = process.env.PYTHON_BIN
+    ? [process.env.PYTHON_BIN]
+    : process.platform === 'win32'
+      ? ['python', 'py']
+      : ['python3', 'python']
+  for (const binary of candidates) {
+    try {
+      const probe = spawnSync(binary, ['--version'], { timeout: 8000, windowsHide: true })
+      if (probe.status === 0) return binary
+    } catch {
+      // keep looking
+    }
+  }
+  return null
+}
+
+async function handleLocalPython(req, res) {
+  const raw = await readBody(req, MAX_BODY_BYTES)
+  let payload
+  try {
+    payload = JSON.parse(raw)
+  } catch {
+    send(res, 400, { ok: false, error: 'Invalid JSON body.' })
+    return
+  }
+  const source = typeof payload.code === 'string' ? payload.code : ''
+  if (source.trim() === '') {
+    send(res, 400, { ok: false, error: 'Missing code.' })
+    return
+  }
+  const binary = resolveLocalPython()
+  if (!binary) {
+    send(res, 200, {
+      ok: false,
+      error: 'No Python interpreter found on this machine (set PYTHON_BIN or install Python).',
+    })
+    return
+  }
+  const child = spawn(binary, ['-c', source], { cwd: WORKSPACE, windowsHide: true })
+  let stdout = ''
+  let stderr = ''
+  let settled = false
+  const timer = setTimeout(() => {
+    if (settled) return
+    settled = true
+    child.kill('SIGKILL')
+    send(res, 200, { ok: false, error: `Python script timed out after ${PYTHON_TIMEOUT_MS / 1000}s.` })
+  }, PYTHON_TIMEOUT_MS)
+  child.stdout.on('data', (chunk) => {
+    stdout += chunk
+  })
+  child.stderr.on('data', (chunk) => {
+    stderr += chunk
+  })
+  child.on('error', (error) => {
+    if (settled) return
+    settled = true
+    clearTimeout(timer)
+    send(res, 200, { ok: false, error: error.message })
+  })
+  child.on('close', (code) => {
+    if (settled) return
+    settled = true
+    clearTimeout(timer)
+    send(res, 200, { ok: true, code: code ?? 0, stdout: stdout.trimEnd(), stderr: stderr.trimEnd() })
+  })
+}
+
+// --------------------------------------------------------------------------
+// /local/rag — retrieve relevant context from a knowledge directory, using the
+// same retrieval brain-core uses inside brain runs. The browser calls this for
+// the RAG node so retrieval happens on the machine holding the knowledge.
+// --------------------------------------------------------------------------
+async function handleLocalRag(req, res) {
+  const raw = await readBody(req, MAX_BODY_BYTES)
+  let payload
+  try {
+    payload = JSON.parse(raw)
+  } catch {
+    send(res, 400, { ok: false, error: 'Invalid JSON body.' })
+    return
+  }
+  const query =
+    typeof payload.query === 'string' && payload.query.trim() !== ''
+      ? payload.query.trim()
+      : 'summarize the available knowledge'
+  const knowledgeDir =
+    typeof payload.knowledgeDir === 'string' && payload.knowledgeDir.trim() !== ''
+      ? payload.knowledgeDir.trim()
+      : KNOWLEDGE_DIR
+  if (typeof retrieveKnowledge !== 'function') {
+    send(res, 501, { ok: false, error: 'Knowledge retrieval is not available in this build.' })
+    return
+  }
+  const pushLog = (message) => console.log(`[rag] ${message}`)
+  const result = await retrieveKnowledge(query, knowledgeDir, pushLog, null, null)
+  send(res, 200, { ok: true, ...result })
+}
+
+// --------------------------------------------------------------------------
 // /registry — local-first storage of .brain files (the user's own library).
 // --------------------------------------------------------------------------
 async function handleRegistry(req, res) {
@@ -813,6 +924,18 @@ const server = http.createServer((req, res) => {
   }
   if (req.method === 'POST' && pathname === '/local/files') {
     handleLocalFiles(req, res).catch((error) =>
+      send(res, 500, { ok: false, error: error instanceof Error ? error.message : String(error) }),
+    )
+    return
+  }
+  if (req.method === 'POST' && pathname === '/local/python') {
+    req.setTimeout(30000)
+    handleLocalPython(req, res)
+    return
+  }
+  if (req.method === 'POST' && pathname === '/local/rag') {
+    req.setTimeout(30000)
+    handleLocalRag(req, res).catch((error) =>
       send(res, 500, { ok: false, error: error instanceof Error ? error.message : String(error) }),
     )
     return

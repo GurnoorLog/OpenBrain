@@ -26,6 +26,26 @@ export function setReportDownloadEnabled(enabled: boolean): void {
 
 const rand = (max: number): number => Math.floor(Math.random() * max)
 
+function runtimeBaseUrl(): string {
+  const env = import.meta.env
+  return env.VITE_RUNTIME_URL || env.VITE_CLOUD_EXECUTOR_URL || 'http://127.0.0.1:8080'
+}
+
+async function runtimePost(
+  pathname: string,
+  body: unknown,
+  signal?: AbortSignal,
+): Promise<{ ok: boolean; error?: string; [key: string]: unknown }> {
+  const url = `${runtimeBaseUrl()}${pathname}`
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+    signal,
+  })
+  return response.json().catch(() => ({ ok: false, error: `Invalid response from ${url}` }))
+}
+
 // Compact one-line preview used for logs/output summaries (truncates long text).
 function firstValue(inputs: NodeInputs): string {
   const value = Object.values(inputs).find(
@@ -116,10 +136,107 @@ function delay(ms: number, signal?: AbortSignal): Promise<void> {
   })
 }
 
-// Default executor for every node type. Simulates work (delay + canned
-// output) so the whole pipeline is runnable before real executors exist.
-// For LLM nodes it uses the AIProvider interface only when one is supplied
-// and configured; otherwise it simulates a completion.
+function splitGoalClauses(goal: string): string[] {
+  const cleaned = goal.replace(/\r/g, '').trim()
+  if (cleaned === '') return []
+  return cleaned
+    .split(/\n|(?<=[.!?;])\s+(?=[A-Z0-9])/)
+    .map((s) => s.trim())
+    .filter((s) => s.length > 2)
+}
+
+const GATE_OPERATORS: readonly { symbol: string; kind: string }[] = [
+  { symbol: '>=', kind: 'cmp' },
+  { symbol: '<=', kind: 'cmp' },
+  { symbol: '!==', kind: 'cmp' },
+  { symbol: '===', kind: 'cmp' },
+  { symbol: '!=', kind: 'cmp' },
+  { symbol: '==', kind: 'cmp' },
+  { symbol: '>', kind: 'cmp' },
+  { symbol: '<', kind: 'cmp' },
+  { symbol: ' contains ', kind: 'contains' },
+  { symbol: 'startsWith(', kind: 'startsWith' },
+  { symbol: 'endsWith(', kind: 'endsWith' },
+]
+
+function evaluateGateCondition(
+  expression: string,
+  value: string,
+): { passed: boolean; reason: string } {
+  const raw = expression.trim()
+  if (raw === '' && value === '') {
+    return { passed: true, reason: 'gate opened (empty gate)' }
+  }
+  if (raw !== '') {
+    for (const { symbol, kind } of GATE_OPERATORS) {
+      const idx = raw.indexOf(symbol)
+      if (idx === -1) continue
+      const lhs = raw.slice(0, idx).trim()
+      let rhs = raw.slice(idx + symbol.length).trim()
+      if (kind === 'startsWith' || kind === 'endsWith') rhs = rhs.replace(/\)$/g, '')
+      const kindMap: Record<string, string> = {
+        cmp: 'cmp',
+        contains: 'contains',
+        startsWith: 'startsWith',
+        endsWith: 'endsWith',
+      }
+      if (lhs !== '' && value === '') {
+        return { passed: false, reason: `gate missing "${lhs}" value for comparison` }
+      }
+      const val = value
+      const numVal = Number(val)
+      const numRhs = Number(rhs)
+      let matched = false
+      switch (kindMap[kind]) {
+        case 'cmp':
+          matched = Object.is(val, rhs)
+          break
+        case 'contains':
+          matched = val.includes(rhs)
+          break
+        case 'startsWith':
+          matched = val.startsWith(rhs)
+          break
+        case 'endsWith':
+          matched = val.endsWith(rhs)
+          break
+      }
+      if (matched) {
+        if (!Number.isNaN(numVal) && !Number.isNaN(numRhs)) {
+          switch (symbol) {
+            case '>':
+              matched = numVal > numRhs
+              break
+            case '<':
+              matched = numVal < numRhs
+              break
+            case '>=':
+              matched = numVal >= numRhs
+              break
+            case '<=':
+              matched = numVal <= numRhs
+              break
+          }
+        }
+      }
+      return matched
+        ? { passed: true, reason: `expression "${expression}" evaluated to true` }
+        : { passed: false, reason: `expression "${expression}" evaluated to false` }
+    }
+  }
+  if (raw === 'true') return { passed: true, reason: 'condition is literal true' }
+  if (raw === 'false') return { passed: false, reason: 'condition is literal false' }
+  return raw !== ''
+    ? { passed: false, reason: `no recognized comparison operator found in "${expression}"` }
+    : { passed: value !== '', reason: value !== '' ? 'gate passed (value present)' : 'gate blocked (no value provided)' }
+}
+
+// Default executor for every node type. Node types that need host-side work
+// (filesystem, python, rag) route through the runtime's REST endpoints, which
+// run on the machine where the workspace and knowledge live. Planner decomposes
+// goals locally; gate evaluates locally. Tool nodes (browser/github/mcp/image-
+// gen/news) are overridden at registration time by ToolNodeExecutor, which
+// calls the real tool backends.
 export class MockNodeExecutor implements NodeExecutor {
   constructor(
     private readonly type: NodeType,
@@ -141,7 +258,7 @@ export class MockNodeExecutor implements NodeExecutor {
       case 'github':
         return this.github(context)
       case 'filesystem':
-        return this.filesystem(context)
+        return this.filesystem(inputs, context)
       case 'python':
         return this.python(inputs, context)
       case 'rag':
@@ -171,8 +288,6 @@ export class MockNodeExecutor implements NodeExecutor {
     const provider = this.options?.provider
     const memoryHistory = typeof inputs['history'] === 'string' ? inputs['history'] : ''
     const node = context.brain.nodes.find((entry) => entry.id === context.currentNodeId)
-    // Chat-driven runs stamp the user's message onto the llm node so the model
-    // answers THE question, on top of the browser/memory context from edges.
     const userMessage =
       typeof node?.configuration['userMessage'] === 'string' &&
       node.configuration['userMessage'].trim() !== ''
@@ -188,9 +303,6 @@ export class MockNodeExecutor implements NodeExecutor {
       memoryHistory.trim() !== ''
         ? `\n\n(From memory — prior runs of this brain:\n${memoryHistory.trim()})`
         : ''
-    // The architect stamps each llm node with a role/system prompt in
-    // configuration.instructions (e.g. "You are a research assistant…"), so the
-    // model knows what it is instead of answering as a generic chatbot.
     const configuredInstructions =
       typeof node?.configuration['instructions'] === 'string' &&
       node.configuration['instructions'].trim() !== ''
@@ -198,8 +310,6 @@ export class MockNodeExecutor implements NodeExecutor {
         : ''
     if (provider && provider.config.status === 'available') {
       context.log('LLM querying the configured AI provider.', { nodeId: context.currentNodeId })
-      // Honor the model the architect/brain chose; fall back to the provider's
-      // own default so a brain without an explicit model still works.
       const brainProvider = context.brain?.provider
       const model =
         brainProvider?.model && brainProvider.model.trim() !== ''
@@ -223,6 +333,10 @@ export class MockNodeExecutor implements NodeExecutor {
       })
       return { response: completion.content }
     }
+    context.log(
+      'No AI provider configured — LLM responding with a simulation. Open Settings to connect Fireworks or Ollama.',
+      { level: 'warning', nodeId: context.currentNodeId },
+    )
     await delay(900 + rand(300), context.signal)
     const logPrompt = `${prompt}${userNote}${memoryNote}`.trim()
     context.log(`LLM reasoning over: ${logPrompt.slice(0, 80)}`, { nodeId: context.currentNodeId })
@@ -290,16 +404,25 @@ export class MockNodeExecutor implements NodeExecutor {
     await store.write(projectId, next)
     const historyText = next.map((e) => e.value).join('\n')
     context.log('Memory updated with new context.', { nodeId: context.currentNodeId })
-    // `stored` carries the FULL accumulated history so a memory -> llm edge
-    // feeds every prior run into the model (cross-run memory).
     return { stored: historyText, history: historyText, previousCount: previous.length }
   }
 
   private async planner(inputs: NodeInputs, context: ExecutionContext): Promise<NodeOutputs> {
-    await delay(500 + rand(300), context.signal)
-    const goal = firstValue(inputs) || 'the task'
-    context.log(`Planner decomposed: ${goal}`, { nodeId: context.currentNodeId })
-    return { plan: ['Gather information', 'Analyze inputs', 'Synthesize result', 'Deliver output'] }
+    const node = context.brain.nodes.find((entry) => entry.id === context.currentNodeId)
+    const goal =
+      (typeof node?.configuration['goal'] === 'string' && node.configuration['goal'].trim() !== ''
+        ? node.configuration['goal'].trim()
+        : firstValue(inputs)) || 'the task'
+    const plan = splitGoalClauses(goal)
+    if (plan.length > 0) {
+      context.log(`Planner decomposed "${goal}" into ${plan.length} steps.`, { nodeId: context.currentNodeId })
+      return { plan, count: plan.length, goal }
+    }
+    context.log(`Planner found no actionable decomposition for "${goal}".`, {
+      level: 'warning',
+      nodeId: context.currentNodeId,
+    })
+    return { plan: [], count: 0, goal }
   }
 
   private async browser(context: ExecutionContext): Promise<NodeOutputs> {
@@ -314,51 +437,99 @@ export class MockNodeExecutor implements NodeExecutor {
     return { repos: ['acme/api-service', 'acme/web-app', 'acme/infra'] }
   }
 
-  private async filesystem(context: ExecutionContext): Promise<NodeOutputs> {
-    await delay(400 + rand(300), context.signal)
+  private async filesystem(_inputs: NodeInputs, context: ExecutionContext): Promise<NodeOutputs> {
     const node = context.brain.nodes.find((entry) => entry.id === context.currentNodeId)
-    const content =
-      typeof node?.configuration['content'] === 'string' ? node.configuration['content'] : ''
-    if (content.trim() !== '') {
-      context.log('Filesystem read user-provided content.', { nodeId: context.currentNodeId })
-      return { content }
+    const operation = typeof node?.configuration['operation'] === 'string' ? node.configuration['operation'] : 'read'
+    const filePath = typeof node?.configuration['path'] === 'string' ? node.configuration['path'] : ''
+    if (filePath.trim() === '') {
+      const content = typeof node?.configuration['content'] === 'string' ? node.configuration['content'] : ''
+      if (content.trim() !== '') {
+        context.log('Filesystem using provided content from node configuration.', { nodeId: context.currentNodeId })
+        return { content }
+      }
+      context.log('Filesystem: no file path or content configured.', { level: 'warning', nodeId: context.currentNodeId })
+      return { content: '' }
     }
-    context.log('Filesystem read local files.', { nodeId: context.currentNodeId })
-    return { content: '# README\n\nProject scaffold initialized.\n\n- 12 source files\n- 4 modules\n' }
+    context.log(`Filesystem: ${operation} "${filePath}" via runtime.`, { nodeId: context.currentNodeId })
+    const body: Record<string, unknown> = { op: operation, path: filePath }
+    if (operation === 'write') {
+      body.content = typeof node?.configuration['content'] === 'string' ? node.configuration['content'] : ''
+    }
+    const result = await runtimePost('/local/files', body, context.signal)
+    if (!result.ok) {
+      const reason = typeof result.error === 'string' ? result.error : 'runtime not reachable'
+      context.log(`Filesystem failed: ${reason}`, { level: 'error', nodeId: context.currentNodeId })
+      return { content: '', error: reason }
+    }
+    const content = typeof result.content === 'string' ? result.content : ''
+    context.log(`Filesystem ${operation} succeeded.`, { level: 'success', nodeId: context.currentNodeId })
+    return { content }
   }
 
   private async python(inputs: NodeInputs, context: ExecutionContext): Promise<NodeOutputs> {
-    await delay(500 + rand(400), context.signal)
-    const source = firstValue(inputs) || 'print("ok")'
-    context.log('Python executed script.', { nodeId: context.currentNodeId })
-    return { result: `Executed ${source.length} chars → "ok"` }
+    const node = context.brain.nodes.find((entry) => entry.id === context.currentNodeId)
+    const source =
+      (typeof inputs['source'] === 'string' && inputs['source'].trim() !== ''
+        ? inputs['source']
+        : typeof node?.configuration['code'] === 'string'
+          ? node.configuration['code']
+          : '') || 'print("ok")'
+    context.log('Python: executing script via runtime.', { nodeId: context.currentNodeId })
+    const result = await runtimePost('/local/python', { code: source }, context.signal)
+    if (!result.ok) {
+      const reason = typeof result.error === 'string' ? result.error : 'runtime not reachable'
+      context.log(`Python failed: ${reason}`, { level: 'error', nodeId: context.currentNodeId })
+      return { result: null, error: reason, code: null }
+    }
+    const stdout = typeof result.stdout === 'string' ? result.stdout : ''
+    const stderr = typeof result.stderr === 'string' ? result.stderr : ''
+    const exitCode = typeof result.code === 'number' ? result.code : 0
+    context.log(`Python exited with code ${exitCode}.`, {
+      level: exitCode === 0 ? 'success' : 'warning',
+      nodeId: context.currentNodeId,
+    })
+    return { result: stdout, stderr, code: exitCode }
   }
 
   private async rag(inputs: NodeInputs, context: ExecutionContext): Promise<NodeOutputs> {
-    await delay(550 + rand(350), context.signal)
+    const node = context.brain.nodes.find((entry) => entry.id === context.currentNodeId)
     const query = firstValue(inputs) || 'context'
-    context.log(`RAG retrieved documents for "${query}".`, { nodeId: context.currentNodeId })
-    return {
-      documents: [
-        `knowledge#1 — ${query} basics`,
-        `knowledge#2 — ${query} advanced`,
-        `knowledge#3 — ${query} patterns`,
-      ],
+    const knowledgeDir =
+      typeof node?.configuration['knowledgeDir'] === 'string' && node.configuration['knowledgeDir'].trim() !== ''
+        ? node.configuration['knowledgeDir'].trim()
+        : ''
+    context.log(`RAG: retrieving documents for "${query}" via runtime.`, { nodeId: context.currentNodeId })
+    const body: Record<string, unknown> = { query }
+    if (knowledgeDir !== '') body.knowledgeDir = knowledgeDir
+    const result = await runtimePost('/local/rag', body, context.signal)
+    if (!result.ok) {
+      const reason = typeof result.error === 'string' ? result.error : 'runtime not reachable'
+      context.log(`RAG failed: ${reason}`, { level: 'error', nodeId: context.currentNodeId })
+      return { documents: [], error: reason }
     }
+    const documents = Array.isArray(result.documents) ? result.documents : []
+    context.log(`RAG retrieved ${documents.length} document(s).`, {
+      level: documents.length > 0 ? 'success' : 'warning',
+      nodeId: context.currentNodeId,
+    })
+    return { documents }
   }
 
   private async finetune(inputs: NodeInputs, context: ExecutionContext): Promise<NodeOutputs> {
-    await delay(800 + rand(500), context.signal)
     const dataset = firstValue(inputs) || 'unknown dataset'
+    const node = context.brain.nodes.find((entry) => entry.id === context.currentNodeId)
     const baseModel =
-      typeof inputs['baseModel'] === 'string' && inputs['baseModel'] !== ''
-        ? inputs['baseModel']
-        : 'unknown base model'
-    context.log(`Fine-tune planned on ${baseModel} using ${dataset} (dry-run, nothing submitted).`, {
-      nodeId: context.currentNodeId,
-    })
+      typeof node?.configuration['baseModel'] === 'string' && node.configuration['baseModel'].trim() !== ''
+        ? node.configuration['baseModel'].trim()
+        : typeof inputs['baseModel'] === 'string' && inputs['baseModel'].trim() !== ''
+          ? inputs['baseModel']
+          : 'unknown base model'
     const slug = baseModel.replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40)
-    return { model: `hf://fine-tune-${slug || 'model'}` }
+    context.log(
+      `Fine-tune planned: base=${baseModel}, dataset=${dataset}, slug=${slug}. Submit a job from the Fine-tune panel.`,
+      { nodeId: context.currentNodeId },
+    )
+    return { status: 'planned', baseModel, dataset, slug, model: null }
   }
 
   private async output(inputs: NodeInputs, context: ExecutionContext): Promise<NodeOutputs> {
@@ -369,8 +540,6 @@ export class MockNodeExecutor implements NodeExecutor {
     context.log(`Output delivered: ${summary.slice(0, 80)}`, { level: 'success', nodeId: context.currentNodeId })
     if (value !== undefined && inputs['download'] !== false && reportDownloadEnabled) {
       try {
-        // Record this node's output before building the report, otherwise the
-        // report's Node Outputs section omits the final result.
         context.setNodeOutputs(context.currentNodeId ?? '', { result: value })
         const markdown = buildRunReport(context)
         downloadReport(markdown, `${context.brain.name || 'brain'}-report.md`)
@@ -399,41 +568,86 @@ export class MockNodeExecutor implements NodeExecutor {
   }
 
   private async agent(inputs: NodeInputs, context: ExecutionContext): Promise<NodeOutputs> {
-    await delay(700 + rand(400), context.signal)
-    const task = firstValue(inputs) || 'the task'
-    context.log(`Agent delegated: ${task}`, { nodeId: context.currentNodeId })
-    return { result: `Sub-agent reported back on "${task}"` }
+    const provider = this.options?.provider
+    const node = context.brain.nodes.find((entry) => entry.id === context.currentNodeId)
+    const task =
+      (typeof node?.configuration['task'] === 'string' && node.configuration['task'].trim() !== ''
+        ? node.configuration['task'].trim()
+        : firstValue(inputs)) || 'the task'
+    if (!provider || provider.config.status !== 'available') {
+      context.log(
+        'Agent node needs an AI provider. Open Settings to connect Fireworks or Ollama.',
+        { level: 'warning', nodeId: context.currentNodeId },
+      )
+      return { result: null, error: 'no AI provider configured' }
+    }
+    context.log(`Agent: delegating "${task}" to a sub-agent.`, { nodeId: context.currentNodeId })
+    const brainProvider = context.brain?.provider
+    const model =
+      brainProvider?.model && brainProvider.model.trim() !== ''
+        ? brainProvider.model
+        : provider.config.model
+    const completion = await provider.complete({
+      messages: [
+        {
+          role: 'system',
+          content:
+            'You are a focused sub-agent of an OpenBrain graph. Use only the context given to you. Answer the task concisely and do not repeat instructions.',
+        },
+        { role: 'user', content: task },
+      ],
+      model,
+      temperature: provider.config.temperature,
+      maxTokens: brainProvider?.maxTokens ?? provider.config.maxTokens,
+      signal: context.signal,
+    })
+    context.log(`Agent completed: "${task}"`, { level: 'success', nodeId: context.currentNodeId })
+    return { result: completion.content }
   }
 
   private async subbrain(context: ExecutionContext): Promise<NodeOutputs> {
-    await delay(650 + rand(400), context.signal)
-    context.log('Sub-brain invoked.', { nodeId: context.currentNodeId })
-    return { result: { nested: true, status: 'ok' } }
+    context.log(
+      'Sub-brain nodes execute through WorkerNodeExecutor when the worker runtime is configured.',
+      { level: 'warning', nodeId: context.currentNodeId },
+    )
+    return { result: { status: 'requires-worker-runtime' } }
   }
 
   private async gate(inputs: NodeInputs, context: ExecutionContext): Promise<NodeOutputs> {
-    await delay(200 + rand(100), context.signal)
-    const passed = inputs['condition'] !== false
-    context.log(passed ? 'Gate passed.' : 'Gate blocked.', { nodeId: context.currentNodeId })
+    const node = context.brain.nodes.find((entry) => entry.id === context.currentNodeId)
+    const expression =
+      typeof node?.configuration['condition'] === 'string' ? node.configuration['condition'] : ''
+    const value = firstValue(inputs)
+    const { passed, reason } = evaluateGateCondition(expression, value)
+    context.log(reason, {
+      level: passed ? 'success' : 'warning',
+      nodeId: context.currentNodeId,
+    })
     return { passed }
   }
 
   private async tool(inputs: NodeInputs, context: ExecutionContext): Promise<NodeOutputs> {
-    await delay(400 + rand(300), context.signal)
     const input = firstValue(inputs) || 'no input'
-    context.log(`Local tool ran with "${input}".`, { nodeId: context.currentNodeId })
-    return { result: { tool: 'example-tool', input, ok: true } }
+    context.log(
+      'The generic "tool" node does not run directly. Replace it with a specific tool node (GitHub, MCP, Browser, ImageGen, or News) which connects to a real tool backend.',
+      { level: 'warning', nodeId: context.currentNodeId },
+    )
+    return { result: { input, note: 'use a specific tool node type' } }
   }
 
-  private async generic(inputs: NodeInputs, context: ExecutionContext): Promise<NodeOutputs> {
-    await delay(400 + rand(300), context.signal)
-    context.log('Node executed with canned output.', { nodeId: context.currentNodeId })
-    return { result: { processed: Object.keys(inputs), ok: true } }
+  private async generic(_inputs: NodeInputs, context: ExecutionContext): Promise<NodeOutputs> {
+    context.log(
+      `Unknown node type "${this.type}". Replace this node with a known type: llm, memory, planner, browser, github, filesystem, python, rag, finetune, output, trigger, mcp, agent, subbrain, gate, or a specific tool node.`,
+      { level: 'warning', nodeId: context.currentNodeId },
+    )
+    return { result: null, error: `unknown node type "${this.type}"` }
   }
 }
 
-// Registers a MockNodeExecutor for every known node type. Later, real
-// executors can be swapped in per type on the same registry.
+// Registers a MockNodeExecutor for every known node type. Tool-specific nodes
+// (browser, github, mcp, imagegen, news) are overridden at registration by
+// WorkerNodeExecutor.getRegistry, which maps them to real ToolNodeExecutor
+// calls against the configured tool backends.
 export function createMockExecutors(options?: MockExecutorsOptions): Readonly<Record<string, NodeExecutor>> {
   const executors: Record<string, NodeExecutor> = {}
   for (const entry of NODE_CATALOG) {
