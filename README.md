@@ -4,15 +4,13 @@ Still beta. I am working on it as I write this. So if u encounter a bug pls forg
 Here's a video of what it does at the present moment:
 [Watch the demo](https://youtu.be/tX9TiHpuJhE?si=FQzuDhMjM4sVOkWC)
 
-So basically u free an AI agent
-
-That's the whole idea. You drag nodes around a canvas, wire them up, and you have an agent. Or you type a sentence and an AI constructs the entire graph for you. Everything runs on your own machine.
+So basically u free an AI agent. That's the whole idea. You drag nodes around a canvas, wire them up, and you have an agent. Or you type a sentence and an AI constructs the entire graph for you. Everything runs on your own machine.
 
 ---
 
 ## What is this
 
-Think of it as a text-based approach to AI with the power of Unreal Engine, but for AI instead of games. Every node on the canvas does something real. Calls an LLM. Grabs a webpage. Reads a file. Runs code. Connect them and you have an agent.
+It's a visual language for building AI agents — like Unreal Engine Blueprints or n8n, except the thing you're wiring up is an agent. The graph *is* the program. Every node does something real: calls an LLM, grabs a webpage, reads a file, runs code, remembers context. Connect them and you have an agent. The `.brain` file is the source code of that agent — open it, version it, send it to a friend, run it on a server. One agent, one file.
 
 Or simply tell the AI what you want:
 
@@ -34,7 +32,7 @@ It generates the graph for you. You see it happen.
 
 **Actually functional tools.** LLM calls, web scraping, file I/O, GitHub, MCP, RAG, Python, image gen. Not placeholders.
 
-**`.brain` files.** Export your agent as one file. Share it, version control it, run it somewhere else.
+**`.brain` files.** Your agent's source code is one file. Open it, version it, share it, run it somewhere else.
 
 ---
 
