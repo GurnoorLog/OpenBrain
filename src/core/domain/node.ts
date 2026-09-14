@@ -1,5 +1,4 @@
-import type { EntityId, JsonValue } from './common'
-import type { NodeMetadata } from './metadata'
+import type { EdgeMetadata, EntityId, JsonValue, NodeMetadata } from './common'
 
 export type NodeStatus = 'idle' | 'pending' | 'running' | 'success' | 'error'
 
@@ -63,4 +62,15 @@ export interface BrainNode {
   readonly outputs: readonly NodePort[]
   readonly configuration: NodeConfiguration
   readonly metadata: NodeMetadata
+}
+
+export interface BrainEdge {
+  readonly id: EntityId
+  readonly source: EntityId
+  readonly sourcePort: string
+  readonly target: EntityId
+  readonly targetPort: string
+  readonly label?: string
+  readonly animated: boolean
+  readonly metadata: EdgeMetadata
 }

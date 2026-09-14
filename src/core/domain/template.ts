@@ -1,10 +1,7 @@
 import type { EntityId, Timestamp } from './common'
-import type { BrainNode } from './node'
-import type { BrainEdge } from './edge'
-import type { BrainSettings } from './settings'
-import type { KnowledgeBase } from './knowledge'
-import type { MemoryConfiguration } from './memory'
-import type { ProviderConfiguration } from './provider'
+import type { BrainEdge, BrainNode } from './node'
+import type { BrainSettings, ProviderConfiguration } from './provider'
+import type { KnowledgeBase, MemoryConfiguration } from './knowledge'
 
 export type TemplateCategory =
   | 'starter'

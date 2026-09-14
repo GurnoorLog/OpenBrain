@@ -1,5 +1,4 @@
-import type { EntityId, Timestamp } from './common'
-import type { RecordMetadata } from './metadata'
+import type { EntityId, JsonValue, RecordMetadata, Timestamp } from './common'
 
 export type KnowledgeSourceType =
   | 'text'
@@ -48,4 +47,23 @@ export interface KnowledgeBase {
   readonly chunkOverlap: number
   readonly retrievalStrategy: RetrievalStrategy
   readonly topK: number
+}
+
+// How a brain keeps context across runs, separate from its static knowledge
+// base: working memory is the current run, the other kinds persist history.
+export type MemoryKind = 'working' | 'long-term' | 'episodic' | 'semantic'
+
+export type MemoryScope = 'brain' | 'global' | 'shared'
+
+export type MemoryStorage = 'in-memory' | 'vector' | 'database'
+
+export interface MemoryConfiguration {
+  readonly enabled: boolean
+  readonly kind: MemoryKind
+  readonly scope: MemoryScope
+  readonly storage: MemoryStorage
+  readonly capacity: number
+  readonly ttlSeconds?: number
+  readonly embeddingModel?: string
+  readonly custom?: Readonly<Record<string, JsonValue>>
 }

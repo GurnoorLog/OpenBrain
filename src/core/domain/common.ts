@@ -37,3 +37,26 @@ export interface Attachment {
   readonly uri: string
   readonly metadata?: Readonly<Record<string, JsonValue>>
 }
+
+// Metadata that any persisted record can carry (timestamps, tags, notes).
+export interface RecordMetadata {
+  readonly createdAt?: Timestamp
+  readonly updatedAt?: Timestamp
+  readonly tags?: readonly string[]
+  readonly notes?: string
+  readonly custom?: Readonly<Record<string, JsonValue>>
+}
+
+export interface BrainMetadata extends RecordMetadata {
+  readonly author?: string
+  readonly thumbnail?: string
+  readonly versionNote?: string
+  readonly forkOf?: EntityId
+}
+
+export interface NodeMetadata extends RecordMetadata {
+  readonly locked?: boolean
+  readonly groupId?: EntityId
+}
+
+export interface EdgeMetadata extends RecordMetadata {}
